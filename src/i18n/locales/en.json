@@ -1,0 +1,252 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "rename": "Rename",
+    "create": "Create",
+    "add": "Add",
+    "back": "Back",
+    "confirm": "Confirm",
+    "saving": "Saving...",
+    "required": "*"
+  },
+  "auth": {
+    "tagline": "Manage your projects, anywhere and anytime.",
+    "signInWithGoogle": "Sign in with Google"
+  },
+  "header": {
+    "menu": "Menu",
+    "offline": "Offline",
+    "regenerateWidgets": "Regenerate all widgets",
+    "widgets": "Widgets",
+    "newProject": "+ New project",
+    "userMenu": "User menu",
+    "settings": "Settings",
+    "signOut": "Sign out"
+  },
+  "sidebar": {
+    "filters": "Filters",
+    "close": "Close",
+    "tags": "Tags",
+    "all": "All",
+    "createTag": "Create tag"
+  },
+  "home": {
+    "searchPlaceholder": "Search a project...",
+    "sortAlpha": "A → Z",
+    "sortRecent": "Recent",
+    "emptyCreate": "Start by creating your first project",
+    "createProject": "Create a project",
+    "noResults": "No project matches this filter",
+    "resetFilters": "Reset filters"
+  },
+  "project": {
+    "breadcrumb": "Projects",
+    "notFound": "Project not found",
+    "backLink": "← Back",
+    "selectTab": "Select a tab",
+    "options": "Options",
+    "archive": "Archive",
+    "deleteTitle": "Delete \"{{name}}\"?",
+    "deleteDescription": "This action is irreversible. All project data will be permanently deleted.",
+    "deleteTabTitle": "Delete tab \"{{title}}\"?",
+    "deleteTabDescription": "All data in this tab will be permanently deleted."
+  },
+  "createProject": {
+    "title": "New project",
+    "nameLabel": "Name",
+    "namePlaceholder": "Project name",
+    "shortDescLabel": "Short description",
+    "shortDescPlaceholder": "Optional",
+    "tagsLabel": "Tags",
+    "addTag": "+ Tag",
+    "tagNamePlaceholder": "Tag name",
+    "createTag": "Create tag"
+  },
+  "tabBar": {
+    "addTab": "Add tab",
+    "rename": "Rename",
+    "delete": "Delete"
+  },
+  "addTab": {
+    "title": "Add tab",
+    "tabTitle": "Tab title",
+    "chaosSources": "Chaos sources",
+    "selectOneChaos": "Select at least one Chaos tab",
+    "todoExists": "A Todo tab already exists",
+    "widgetsExists": "A Widgets tab already exists",
+    "noChaos": "Create a Chaos tab first",
+    "add": "Add",
+    "types": {
+      "todo": {
+        "label": "Todo",
+        "description": "Task list with indentation and urgency"
+      },
+      "chaos": {
+        "label": "Chaos",
+        "description": "Free text area, unstructured notes"
+      },
+      "digest": {
+        "label": "Digest",
+        "description": "AI summary from Chaos notes"
+      },
+      "widgets": {
+        "label": "Widgets",
+        "description": "AI summaries displayed on the home card"
+      }
+    }
+  },
+  "descriptionTab": {
+    "defaultTitle": "Description",
+    "shortDesc": "Short description",
+    "showOnCard": "Show on card",
+    "shortDescPlaceholder": "A short summary of your project...",
+    "longDesc": "Long description",
+    "longDescPlaceholder": "History, context, important information about this project... (Markdown supported)",
+    "keyPoints": "Key points",
+    "showCount": "Show",
+    "onCard": "on card",
+    "addPoint": "Add a point",
+    "keyPointPlaceholder": "Key point...",
+    "reorder": "Reorder",
+    "urgences": "Urgent",
+    "links": "Links",
+    "urlPlaceholder": "https://...",
+    "labelPlaceholder": "Label (optional)",
+    "addLink": "Add a link"
+  },
+  "todoTab": {
+    "show": "Show",
+    "urgentOnCard": "urgent tasks on card",
+    "filterAll": "All",
+    "filterActive": "Active",
+    "filterCompleted": "Completed",
+    "emptyAll": "No tasks.",
+    "emptyActive": "No active tasks.",
+    "emptyCompleted": "No completed tasks.",
+    "addTodo": "+ Add a task",
+    "newTask": "New task...",
+    "move": "Move",
+    "outdent": "Outdent (Shift+Tab)",
+    "indent": "Indent (Tab)",
+    "markUrgent": "Mark as urgent",
+    "cardLimit": "Card limit ({{max}})"
+  },
+  "chaosTab": {
+    "placeholder": "Write everything here, without organization. Ideas, info, decisions, questions, links...",
+    "saving": "Saving...",
+    "lastModified": "Last modified {{date}}"
+  },
+  "digestTab": {
+    "sources": "Sources:",
+    "prompt": "Prompt",
+    "lastGenerated": "Last generated: {{date}}",
+    "generate": "Generate",
+    "generating": "Generating...",
+    "generatingMessage": "Generating...",
+    "emptyState": "Click \"Generate\" to create a digest from your Chaos notes.",
+    "defaultPrompt": "Clearly and concisely summarize the key information in these notes. Identify important actions, decisions made, and points of attention. Use lists and headings to structure the response.",
+    "noKeyError": "Configure your Gemini key in Settings",
+    "emptyContextError": "The Chaos source tabs are empty",
+    "generated": "Digest generated",
+    "generateError": "Error during generation. Check your Gemini key."
+  },
+  "widgetsTab": {
+    "header": "Widgets ({{count}})",
+    "regenerateAll": "Regenerate all",
+    "add": "Add",
+    "addWidget": "Add a widget",
+    "customWidget": "+ Custom widget",
+    "widgetTitleLabel": "Title",
+    "widgetNamePlaceholder": "Widget name",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask the AI something...",
+    "editWidget": "Edit widget",
+    "emptyState": "Add widgets to display an AI summary on the home card.",
+    "addWidgetButton": "+ Add a widget",
+    "move": "Move",
+    "editPrompt": "Edit prompt",
+    "regenerate": "Regenerate",
+    "generateButton": "Generate",
+    "regenerateAllTitle": "Regenerate {{count}} widgets?",
+    "regenerateAllDescription": "Current content will be replaced by new generations.",
+    "regenerateAllSuccess": "All widgets have been regenerated",
+    "widgetError": "Error for widget \"{{title}}\"",
+    "noKeyError": "Configure your Gemini key in Settings",
+    "presets": {
+      "topTodos": "5 priority todos",
+      "topTodosPrompt": "Based on this project's content, list the 5 most priority tasks to accomplish.",
+      "importantDates": "Upcoming important dates",
+      "importantDatesPrompt": "Identify upcoming deadlines or important dates mentioned in this project.",
+      "progressSummary": "Progress summary",
+      "progressSummaryPrompt": "Give a 3 to 5 sentence summary of the current project progress.",
+      "blockers": "Blockers",
+      "blockersPrompt": "Identify current obstacles, blockers, or risks in the project."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "Back",
+    "gemini": {
+      "title": "Gemini API Key",
+      "placeholder": "AIza...",
+      "test": "Test",
+      "valid": "Valid key",
+      "invalid": "Invalid key",
+      "info": "Your key is stored in your account and never shared. Get a key at",
+      "studioLink": "Google AI Studio",
+      "keySaved": "Key saved",
+      "keyValid": "Gemini key is valid!",
+      "keyInvalid": "Invalid key or network error"
+    },
+    "theme": {
+      "title": "Theme",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "tags": {
+      "title": "Tags",
+      "namePlaceholder": "Tag name",
+      "create": "Create",
+      "ok": "OK",
+      "close": "✕",
+      "createTag": "+ Create a tag",
+      "deleteTitle": "Delete tag \"{{name}}\"?",
+      "deleteDescription": "The tag will be removed from all associated projects."
+    }
+  },
+  "toasts": {
+    "projectsLoadError": "Error loading projects",
+    "projectCreateError": "Unable to create project",
+    "projectCreated": "Project created",
+    "projectUpdateError": "Unable to update project",
+    "projectDeleteError": "Unable to delete project",
+    "projectDeleted": "Project deleted",
+    "projectArchiveError": "Unable to archive project",
+    "projectArchived": "Project archived",
+    "projectRestored": "Project restored",
+    "projectNotFound": "Project not found",
+    "saveError": "Unable to save",
+    "tabAddError": "Unable to add tab",
+    "tabUpdateError": "Unable to update tab",
+    "tabDeleteError": "Unable to delete tab",
+    "tabDeleted": "Tab deleted",
+    "linkAddError": "Unable to add link",
+    "linkDeleteError": "Unable to delete link",
+    "tagsLoadError": "Error loading tags",
+    "tagCreateError": "Unable to create tag",
+    "tagUpdateError": "Unable to update tag",
+    "tagDeleteError": "Unable to delete tag",
+    "tagDeleted": "Tag deleted"
+  },
+  "geminiContext": {
+    "project": "Project:",
+    "description": "Description:",
+    "keyPoints": "Key points:",
+    "notes": "Notes ({{title}}):",
+    "activeTodos": "Active tasks:",
+    "urgent": "URGENT"
+  }
+}

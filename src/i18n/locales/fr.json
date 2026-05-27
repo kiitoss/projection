@@ -1,0 +1,252 @@
+{
+  "common": {
+    "cancel": "Annuler",
+    "save": "Sauvegarder",
+    "delete": "Supprimer",
+    "rename": "Renommer",
+    "create": "Créer",
+    "add": "Ajouter",
+    "back": "Retour",
+    "confirm": "Confirmer",
+    "saving": "Sauvegarde...",
+    "required": "*"
+  },
+  "auth": {
+    "tagline": "Gérez vos projets, partout et en tout temps.",
+    "signInWithGoogle": "Se connecter avec Google"
+  },
+  "header": {
+    "menu": "Menu",
+    "offline": "Hors ligne",
+    "regenerateWidgets": "Regénérer tous les widgets",
+    "widgets": "Widgets",
+    "newProject": "+ Nouveau projet",
+    "userMenu": "Menu utilisateur",
+    "settings": "Paramètres",
+    "signOut": "Déconnexion"
+  },
+  "sidebar": {
+    "filters": "Filtres",
+    "close": "Fermer",
+    "tags": "Tags",
+    "all": "Tous",
+    "createTag": "Créer un tag"
+  },
+  "home": {
+    "searchPlaceholder": "Rechercher un projet...",
+    "sortAlpha": "A → Z",
+    "sortRecent": "Récents",
+    "emptyCreate": "Commencez par créer votre premier projet",
+    "createProject": "Créer un projet",
+    "noResults": "Aucun projet ne correspond à ce filtre",
+    "resetFilters": "Réinitialiser les filtres"
+  },
+  "project": {
+    "breadcrumb": "Projets",
+    "notFound": "Projet introuvable",
+    "backLink": "← Retour",
+    "selectTab": "Sélectionnez un onglet",
+    "options": "Options",
+    "archive": "Archiver",
+    "deleteTitle": "Supprimer \"{{name}}\" ?",
+    "deleteDescription": "Cette action est irréversible. Toutes les données du projet seront supprimées définitivement.",
+    "deleteTabTitle": "Supprimer l'onglet \"{{title}}\" ?",
+    "deleteTabDescription": "Toutes les données de cet onglet seront supprimées définitivement."
+  },
+  "createProject": {
+    "title": "Nouveau projet",
+    "nameLabel": "Nom",
+    "namePlaceholder": "Nom du projet",
+    "shortDescLabel": "Description courte",
+    "shortDescPlaceholder": "Optionnel",
+    "tagsLabel": "Tags",
+    "addTag": "+ Tag",
+    "tagNamePlaceholder": "Nom du tag",
+    "createTag": "Créer le tag"
+  },
+  "tabBar": {
+    "addTab": "Ajouter un onglet",
+    "rename": "Renommer",
+    "delete": "Supprimer"
+  },
+  "addTab": {
+    "title": "Ajouter un onglet",
+    "tabTitle": "Titre de l'onglet",
+    "chaosSources": "Sources Chaos",
+    "selectOneChaos": "Sélectionnez au moins un onglet Chaos",
+    "todoExists": "Un onglet Todo existe déjà",
+    "widgetsExists": "Un onglet Widgets existe déjà",
+    "noChaos": "Créez d'abord un onglet Chaos",
+    "add": "Ajouter",
+    "types": {
+      "todo": {
+        "label": "Todo",
+        "description": "Liste de tâches avec indentation et urgences"
+      },
+      "chaos": {
+        "label": "Chaos",
+        "description": "Zone de texte libre, notes sans structure"
+      },
+      "digest": {
+        "label": "Digest",
+        "description": "Synthèse IA à partir des notes Chaos"
+      },
+      "widgets": {
+        "label": "Widgets",
+        "description": "Résumés IA affichés sur la card d'accueil"
+      }
+    }
+  },
+  "descriptionTab": {
+    "defaultTitle": "Description",
+    "shortDesc": "Description courte",
+    "showOnCard": "Afficher sur la card",
+    "shortDescPlaceholder": "Un résumé court de votre projet...",
+    "longDesc": "Description longue",
+    "longDescPlaceholder": "Historique, contexte, informations importantes sur ce projet... (Markdown supporté)",
+    "keyPoints": "Points clés",
+    "showCount": "Afficher",
+    "onCard": "sur la card",
+    "addPoint": "Ajouter un point",
+    "keyPointPlaceholder": "Point clé...",
+    "reorder": "Réordonner",
+    "urgences": "Urgences",
+    "links": "Liens",
+    "urlPlaceholder": "https://...",
+    "labelPlaceholder": "Label (optionnel)",
+    "addLink": "Ajouter un lien"
+  },
+  "todoTab": {
+    "show": "Afficher",
+    "urgentOnCard": "urgences sur la card",
+    "filterAll": "Toutes",
+    "filterActive": "Actives",
+    "filterCompleted": "Complétées",
+    "emptyAll": "Aucune tâche.",
+    "emptyActive": "Aucune tâche active.",
+    "emptyCompleted": "Aucune tâche complétée.",
+    "addTodo": "+ Ajouter une todo",
+    "newTask": "Nouvelle tâche...",
+    "move": "Déplacer",
+    "outdent": "Désindenter (Shift+Tab)",
+    "indent": "Indenter (Tab)",
+    "markUrgent": "Marquer comme urgent",
+    "cardLimit": "Limite de la card ({{max}})"
+  },
+  "chaosTab": {
+    "placeholder": "Notez tout ici, sans organisation. Idées, infos, décisions, questions, liens...",
+    "saving": "Sauvegarde...",
+    "lastModified": "Dernière modification {{date}}"
+  },
+  "digestTab": {
+    "sources": "Sources :",
+    "prompt": "Prompt",
+    "lastGenerated": "Dernière génération : {{date}}",
+    "generate": "Générer",
+    "generating": "Génération...",
+    "generatingMessage": "Génération en cours...",
+    "emptyState": "Cliquez sur \"Générer\" pour créer un digest à partir de vos notes Chaos.",
+    "defaultPrompt": "Résume de façon claire et synthétique les informations clés contenues dans ces notes. Identifie les actions importantes, les décisions prises et les points d'attention. Utilise des listes et des titres pour structurer la réponse.",
+    "noKeyError": "Configurez votre clé Gemini dans les Paramètres",
+    "emptyContextError": "Les onglets Chaos sources sont vides",
+    "generated": "Digest généré",
+    "generateError": "Erreur lors de la génération. Vérifiez votre clé Gemini."
+  },
+  "widgetsTab": {
+    "header": "Widgets ({{count}})",
+    "regenerateAll": "Regénérer tous",
+    "add": "Ajouter",
+    "addWidget": "Ajouter un widget",
+    "customWidget": "+ Widget personnalisé",
+    "widgetTitleLabel": "Titre",
+    "widgetNamePlaceholder": "Nom du widget",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Demandez quelque chose à l'IA...",
+    "editWidget": "Modifier le widget",
+    "emptyState": "Ajoutez des widgets pour afficher un résumé IA sur la card d'accueil.",
+    "addWidgetButton": "+ Ajouter un widget",
+    "move": "Déplacer",
+    "editPrompt": "Modifier le prompt",
+    "regenerate": "Regénérer",
+    "generateButton": "Générer",
+    "regenerateAllTitle": "Regénérer {{count}} widgets ?",
+    "regenerateAllDescription": "Les contenus actuels seront remplacés par les nouvelles générations.",
+    "regenerateAllSuccess": "Tous les widgets ont été regénérés",
+    "widgetError": "Erreur pour le widget \"{{title}}\"",
+    "noKeyError": "Configurez votre clé Gemini dans les Paramètres",
+    "presets": {
+      "topTodos": "5 todos prioritaires",
+      "topTodosPrompt": "En te basant sur le contenu de ce projet, liste les 5 tâches les plus prioritaires à accomplir.",
+      "importantDates": "Prochaines dates importantes",
+      "importantDatesPrompt": "Identifie les prochaines échéances ou dates importantes mentionnées dans ce projet.",
+      "progressSummary": "Résumé de l'avancement",
+      "progressSummaryPrompt": "Donne un résumé en 3 à 5 phrases de l'avancement actuel du projet.",
+      "blockers": "Points bloquants",
+      "blockersPrompt": "Identifie les obstacles, blocages ou risques actuels du projet."
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "back": "Retour",
+    "gemini": {
+      "title": "Clé API Gemini",
+      "placeholder": "AIza...",
+      "test": "Tester",
+      "valid": "Clé valide",
+      "invalid": "Clé invalide",
+      "info": "Votre clé est stockée dans votre compte et n'est jamais partagée. Obtenez une clé sur",
+      "studioLink": "Google AI Studio",
+      "keySaved": "Clé sauvegardée",
+      "keyValid": "Clé Gemini valide !",
+      "keyInvalid": "Clé invalide ou erreur réseau"
+    },
+    "theme": {
+      "title": "Thème",
+      "system": "Système",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
+    "tags": {
+      "title": "Tags",
+      "namePlaceholder": "Nom du tag",
+      "create": "Créer",
+      "ok": "OK",
+      "close": "✕",
+      "createTag": "+ Créer un tag",
+      "deleteTitle": "Supprimer le tag \"{{name}}\" ?",
+      "deleteDescription": "Le tag sera retiré de tous les projets associés."
+    }
+  },
+  "toasts": {
+    "projectsLoadError": "Erreur lors du chargement des projets",
+    "projectCreateError": "Impossible de créer le projet",
+    "projectCreated": "Projet créé",
+    "projectUpdateError": "Impossible de mettre à jour le projet",
+    "projectDeleteError": "Impossible de supprimer le projet",
+    "projectDeleted": "Projet supprimé",
+    "projectArchiveError": "Impossible d'archiver le projet",
+    "projectArchived": "Projet archivé",
+    "projectRestored": "Projet restauré",
+    "projectNotFound": "Projet introuvable",
+    "saveError": "Impossible de sauvegarder",
+    "tabAddError": "Impossible d'ajouter l'onglet",
+    "tabUpdateError": "Impossible de mettre à jour l'onglet",
+    "tabDeleteError": "Impossible de supprimer l'onglet",
+    "tabDeleted": "Onglet supprimé",
+    "linkAddError": "Impossible d'ajouter le lien",
+    "linkDeleteError": "Impossible de supprimer le lien",
+    "tagsLoadError": "Erreur lors du chargement des tags",
+    "tagCreateError": "Impossible de créer le tag",
+    "tagUpdateError": "Impossible de mettre à jour le tag",
+    "tagDeleteError": "Impossible de supprimer le tag",
+    "tagDeleted": "Tag supprimé"
+  },
+  "geminiContext": {
+    "project": "Projet :",
+    "description": "Description :",
+    "keyPoints": "Points clés :",
+    "notes": "Notes ({{title}}) :",
+    "activeTodos": "Tâches en cours :",
+    "urgent": "URGENT"
+  }
+}
