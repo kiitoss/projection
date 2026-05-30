@@ -5,16 +5,34 @@ import { Header } from '@/components/layout/Header'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ProjectCard } from '@/components/project/ProjectCard'
 import { CreateProjectModal } from '@/components/project/CreateProjectModal'
+import { TagsModal } from '@/components/ui/TagsModal'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { useProjects } from '@/hooks/useProjects'
 import { useTags } from '@/hooks/useTags'
 import { useAppStore } from '@/store/useAppStore'
+import { supabase } from '@/lib/supabase'
+import { generateWithGemini, buildProjectContext } from '@/lib/gemini'
+import { toast } from '@/store/useAppStore'
+import type { Widget, DigestTabConfig } from '@/types'
+
+interface GlobalRegenItems {
+  digestTabs: Array<{ tabId: string; projectId: string; chaosTabIds: string[]; prompt: string }>
+  widgets: Array<Widget & { projectId: string }>
+}
 
 export function HomePage() {
   const { projects, loading, createProject, updateProject, deleteProject, archiveProject } = useProjects()
-  const { tags, createTag } = useTags()
+  const { tags, createTag, updateTag, deleteTag, reorderTags } = useTags()
   const { selectedTagIds, searchQuery, setSearchQuery, sortBy, setSortBy } = useAppStore()
   const [createOpen, setCreateOpen] = useState(false)
+  const [tagsModalOpen, setTagsModalOpen] = useState(false)
+  const [regenAllOpen, setRegenAllOpen] = useState(false)
+  const [regenAllLoading, setRegenAllLoading] = useState(false)
+  const [regenCheckLoading, setRegenCheckLoading] = useState(false)
+  const [regenAllItems, setRegenAllItems] = useState<GlobalRegenItems | null>(null)
+  const [regenProgress, setRegenProgress] = useState<{ current: number; total: number } | null>(null)
   const { t } = useTranslation()
 
   const filteredProjects = useMemo(() => {
@@ -48,23 +66,222 @@ export function HomePage() {
     return counts
   }, [projects])
 
-  async function handleDelete(id: string) {
-    await deleteProject(id)
+  async function handleClickRegenerateAll() {
+    if (!projects.length) return
+    setRegenCheckLoading(true)
+
+    const projectIds = projects.map((p) => p.id)
+
+    const { data: allTabs } = await supabase
+      .from('tabs')
+      .select('id, project_id, type, config')
+      .in('project_id', projectIds)
+
+    const chaosTabs = (allTabs ?? []).filter((t) => t.type === 'chaos') as {
+      id: string; project_id: string; type: string; config: Record<string, unknown>
+    }[]
+    const digestTabs = (allTabs ?? []).filter((t) => t.type === 'digest') as typeof chaosTabs
+    const widgetsTabs = (allTabs ?? []).filter((t) => t.type === 'widgets') as typeof chaosTabs
+
+    // Fetch chaos content updated_at for all chaos tabs
+    const chaosContentsMap: { tab_id: string; updated_at: string }[] = []
+    if (chaosTabs.length) {
+      const { data } = await supabase
+        .from('chaos_content')
+        .select('tab_id, updated_at')
+        .in('tab_id', chaosTabs.map((t) => t.id))
+      chaosContentsMap.push(...((data as { tab_id: string; updated_at: string }[]) ?? []))
+    }
+
+    // Max chaos updated_at per project
+    const chaosMaxByProject: Record<string, Date> = {}
+    for (const cc of chaosContentsMap) {
+      const tab = chaosTabs.find((t) => t.id === cc.tab_id)
+      if (!tab) continue
+      const date = new Date(cc.updated_at)
+      if (!chaosMaxByProject[tab.project_id] || date > chaosMaxByProject[tab.project_id]) {
+        chaosMaxByProject[tab.project_id] = date
+      }
+    }
+
+    // Find stale digest tabs
+    const staleDigestTabs: GlobalRegenItems['digestTabs'] = []
+    for (const digestTab of digestTabs) {
+      const config = digestTab.config as unknown as DigestTabConfig
+      const chaosTabIds: string[] = config?.chaos_tab_ids ?? []
+      if (!chaosTabIds.length) continue
+
+      const relevantChaos = chaosContentsMap.filter((c) => chaosTabIds.includes(c.tab_id))
+      if (!relevantChaos.length) continue
+
+      const maxRelevantChaos = new Date(
+        Math.max(...relevantChaos.map((r) => new Date(r.updated_at).getTime())),
+      )
+
+      const { data: latestGen } = await supabase
+        .from('digest_generated')
+        .select('generated_at')
+        .eq('tab_id', digestTab.id)
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const isStale = !latestGen || maxRelevantChaos > new Date(latestGen.generated_at)
+      if (isStale) {
+        staleDigestTabs.push({
+          tabId: digestTab.id,
+          projectId: digestTab.project_id,
+          chaosTabIds,
+          prompt: (config?.prompt as string) ?? t('digestTab.defaultPrompt'),
+        })
+      }
+    }
+
+    // Find stale widgets
+    const staleWidgets: GlobalRegenItems['widgets'] = []
+    if (widgetsTabs.length) {
+      const { data: allWidgets } = await supabase
+        .from('widgets')
+        .select('*')
+        .in('tab_id', widgetsTabs.map((t) => t.id))
+
+      for (const widget of (allWidgets as Widget[]) ?? []) {
+        const widgetTab = widgetsTabs.find((t) => t.id === widget.tab_id)
+        if (!widgetTab) continue
+        const chaosMax = chaosMaxByProject[widgetTab.project_id]
+        const isStale =
+          !widget.last_generated_at ||
+          (chaosMax && chaosMax > new Date(widget.last_generated_at))
+        if (isStale) staleWidgets.push({ ...widget, projectId: widgetTab.project_id })
+      }
+    }
+
+    setRegenCheckLoading(false)
+
+    if (!staleDigestTabs.length && !staleWidgets.length) {
+      toast.info(t('project.nothingToRegen'))
+      return
+    }
+
+    setRegenAllItems({ digestTabs: staleDigestTabs, widgets: staleWidgets })
+    setRegenAllOpen(true)
   }
 
-  async function handleArchive(id: string) {
-    await archiveProject(id, true)
-  }
+  async function handleConfirmRegenerateAll() {
+    if (!regenAllItems) return
 
-  async function handleRename(id: string, name: string) {
-    await updateProject(id, { name })
+    const { data: apiKey } = await supabase.rpc('get_gemini_key')
+
+    if (!apiKey) {
+      toast.error(t('digestTab.noKeyError'), true)
+      return
+    }
+
+    const total = regenAllItems.digestTabs.length + regenAllItems.widgets.length
+    setRegenAllLoading(true)
+    setRegenProgress({ current: 0, total })
+
+    let current = 0
+
+    // Regenerate stale digests
+    for (const { tabId, chaosTabIds, prompt } of regenAllItems.digestTabs) {
+      try {
+        const [{ data: chaosRows }, { data: chaosTabs }] = await Promise.all([
+          supabase.from('chaos_content').select('content, tab_id').in('tab_id', chaosTabIds),
+          supabase.from('tabs').select('id, title').in('id', chaosTabIds),
+        ])
+
+        const context = ((chaosRows as { content: string; tab_id: string }[]) ?? [])
+          .map((row) => {
+            const tabName =
+              (chaosTabs as { id: string; title: string }[])?.find((ct) => ct.id === row.tab_id)?.title ?? 'Chaos'
+            return `## ${tabName}\n\n${row.content}`
+          })
+          .join('\n\n---\n\n')
+
+        if (!context.trim()) { current++; setRegenProgress({ current, total }); continue }
+
+        const content = await generateWithGemini(apiKey, prompt, context)
+        await supabase
+          .from('digest_generated')
+          .insert({ tab_id: tabId, content, prompt_used: prompt })
+      } catch {
+        toast.error(t('project.regenDigestError'))
+      }
+      current++
+      setRegenProgress({ current, total })
+    }
+
+    // Regenerate stale widgets grouped by project
+    const widgetsByProject = regenAllItems.widgets.reduce<Record<string, Array<Widget & { projectId: string }>>>(
+      (acc, w) => { (acc[w.projectId] ??= []).push(w); return acc },
+      {},
+    )
+
+    for (const [projectId, widgets] of Object.entries(widgetsByProject)) {
+      try {
+        const project = projects.find((p) => p.id === projectId)
+        if (!project) { current += widgets.length; setRegenProgress({ current, total }); continue }
+
+        const { data: projectChaosTabs } = await supabase
+          .from('tabs')
+          .select('id, title')
+          .eq('project_id', projectId)
+          .eq('type', 'chaos')
+
+        const chaosContents: { title: string; content: string }[] = []
+        if (projectChaosTabs?.length) {
+          const { data: chaosRows } = await supabase
+            .from('chaos_content')
+            .select('content, tab_id')
+            .in('tab_id', (projectChaosTabs as { id: string; title: string }[]).map((t) => t.id))
+
+          for (const row of (chaosRows as { content: string; tab_id: string }[]) ?? []) {
+            const tabTitle = (projectChaosTabs as { id: string; title: string }[]).find((t) => t.id === row.tab_id)?.title ?? 'Chaos'
+            chaosContents.push({ title: tabTitle, content: row.content })
+          }
+        }
+
+        const context = buildProjectContext({
+          projectName: project.name,
+          longDescription: project.long_description,
+          keyPoints: project.key_points,
+          chaosContents,
+          todos: [],
+        })
+
+        const now = new Date().toISOString()
+        for (const widget of widgets) {
+          try {
+            const content = await generateWithGemini(apiKey, widget.prompt, context)
+            await supabase
+              .from('widgets')
+              .update({ content, last_generated_at: now })
+              .eq('id', widget.id)
+          } catch {
+            toast.error(t('widgetsTab.widgetError', { title: widget.title }))
+          }
+          current++
+          setRegenProgress({ current, total })
+        }
+      } catch {
+        toast.error(t('project.regenWidgetsError'))
+      }
+    }
+
+    setRegenAllLoading(false)
+    setRegenProgress(null)
+    setRegenAllOpen(false)
+    setRegenAllItems(null)
+    toast.success(t('project.regenAllSuccess'))
   }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <Header
         onNewProject={() => setCreateOpen(true)}
-        hasWidgets={false}
+        onRegenerateAll={handleClickRegenerateAll}
+        regenerateLoading={regenCheckLoading}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -72,31 +289,30 @@ export function HomePage() {
           tags={tags}
           projectCountByTag={projectCountByTag}
           totalCount={projects.length}
-          onCreateTag={() => {}}
+          onManageTags={() => setTagsModalOpen(true)}
+          onReorderTags={reorderTags}
         />
 
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl p-4 lg:p-6">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="relative flex-1 max-w-xs">
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <div className="relative w-full max-w-sm">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('home.searchPlaceholder')}
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 py-2 pl-9 pr-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 py-2.5 pl-9 pr-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setSortBy(sortBy === 'updated_at' ? 'name' : 'updated_at')}
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <ArrowUpDown size={13} />
-                  {sortBy === 'name' ? t('home.sortAlpha') : t('home.sortRecent')}
-                </button>
-              </div>
+              <button
+                onClick={() => setSortBy(sortBy === 'updated_at' ? 'name' : 'updated_at')}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                <ArrowUpDown size={13} />
+                {sortBy === 'name' ? t('home.sortAlpha') : t('home.sortRecent')}
+              </button>
             </div>
 
             {loading ? (
@@ -113,7 +329,7 @@ export function HomePage() {
                     </p>
                     <button
                       onClick={() => setCreateOpen(true)}
-                      className="mt-4 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 transition-colors"
+                      className="mt-4 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 transition-colors cursor-pointer"
                     >
                       {t('home.createProject')}
                     </button>
@@ -125,7 +341,7 @@ export function HomePage() {
                     </p>
                     <button
                       onClick={() => { setSearchQuery(''); useAppStore.getState().clearTagFilters() }}
-                      className="mt-3 text-sm text-indigo-500 hover:underline"
+                      className="mt-3 text-sm text-indigo-500 hover:underline cursor-pointer"
                     >
                       {t('home.resetFilters')}
                     </button>
@@ -138,9 +354,9 @@ export function HomePage() {
                   <ProjectCard
                     key={project.id}
                     project={project}
-                    onDelete={handleDelete}
-                    onArchive={handleArchive}
-                    onRename={handleRename}
+                    onDelete={deleteProject}
+                    onArchive={(id) => archiveProject(id, true)}
+                    onRename={(id, name) => updateProject(id, { name })}
                   />
                 ))}
               </div>
@@ -156,6 +372,51 @@ export function HomePage() {
         tags={tags}
         onCreateTag={createTag}
       />
+
+      <TagsModal
+        open={tagsModalOpen}
+        onClose={() => setTagsModalOpen(false)}
+        tags={tags}
+        onCreateTag={createTag}
+        onUpdateTag={updateTag}
+        onDeleteTag={deleteTag}
+      />
+
+      <Modal
+        open={regenAllOpen}
+        onClose={() => { if (!regenAllLoading) setRegenAllOpen(false) }}
+        title={t('project.regenAllTitle')}
+        size="sm"
+      >
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          {t('project.regenAllDescription', {
+            digests: regenAllItems?.digestTabs.length ?? 0,
+            widgets: regenAllItems?.widgets.length ?? 0,
+          })}
+        </p>
+        {regenProgress && (
+          <div className="mb-4 flex items-center gap-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 px-3 py-2 text-sm text-indigo-600 dark:text-indigo-400">
+            <div className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+            {t('project.regenProgress', { current: regenProgress.current, total: regenProgress.total })}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setRegenAllOpen(false)}
+            disabled={regenAllLoading}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => { void handleConfirmRegenerateAll() }}
+            loading={regenAllLoading}
+          >
+            {t('project.regenAllConfirm')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

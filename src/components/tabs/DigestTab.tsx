@@ -26,6 +26,7 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
   const [promptOpen, setPromptOpen] = useState(false)
   const [editPrompt, setEditPrompt] = useState(prompt)
   const [chaosTabs, setChaosTabs] = useState<{ id: string; title: string }[]>([])
+  const [chaosModified, setChaosModified] = useState(true)
 
   const fetchData = useCallback(async () => {
     const { data: gen } = await supabase
@@ -34,28 +35,36 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
       .eq('tab_id', tab.id)
       .order('generated_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
     setGenerated(gen as DigestGenerated | null)
+    setPromptOpen(!gen)
 
     if (chaosTabIds.length > 0) {
-      const { data: tabs } = await supabase
-        .from('tabs')
-        .select('id, title')
-        .in('id', chaosTabIds)
-      setChaosTabs((tabs as { id: string; title: string }[]) ?? [])
+      const [tabsResult, chaosResult] = await Promise.all([
+        supabase.from('tabs').select('id, title').in('id', chaosTabIds),
+        supabase.from('chaos_content').select('tab_id, updated_at').in('tab_id', chaosTabIds),
+      ])
+      setChaosTabs((tabsResult.data as { id: string; title: string }[]) ?? [])
+
+      if (!gen) {
+        setChaosModified(true)
+      } else if (chaosResult.data?.length) {
+        const maxChaos = Math.max(
+          ...(chaosResult.data as { updated_at: string }[]).map((r) => new Date(r.updated_at).getTime()),
+        )
+        setChaosModified(maxChaos > new Date(gen.generated_at).getTime())
+      } else {
+        setChaosModified(false)
+      }
     }
   }, [tab.id, chaosTabIds.join(',')])
 
   useEffect(() => { fetchData() }, [fetchData])
-  useEffect(() => { if (!generated) setPromptOpen(true) }, [generated])
 
   async function handleGenerate() {
-    const { data: settings } = await supabase
-      .from('user_settings')
-      .select('gemini_api_key')
-      .single()
+    const { data: apiKey } = await supabase.rpc('get_gemini_key')
 
-    if (!settings?.gemini_api_key) {
+    if (!apiKey) {
       toast.error(t('digestTab.noKeyError'), true)
       return
     }
@@ -79,7 +88,7 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
 
     setGenerating(true)
     try {
-      const content = await generateWithGemini(settings.gemini_api_key, editPrompt, context)
+      const content = await generateWithGemini(apiKey, editPrompt, context)
       const { data: gen } = await supabase
         .from('digest_generated')
         .insert({ tab_id: tab.id, content, prompt_used: editPrompt })
@@ -87,6 +96,7 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
         .single()
       if (gen) setGenerated(gen as DigestGenerated)
       setPromptOpen(false)
+      setChaosModified(false)
       toast.success(t('digestTab.generated'))
     } catch {
       toast.error(t('digestTab.generateError'), true)
@@ -98,6 +108,8 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
     setEditPrompt(newPrompt)
     await onUpdateTab({ config: { ...tab.config, prompt: newPrompt } })
   }
+
+  const generateDisabled = chaosTabIds.length === 0 || (!!generated && !chaosModified)
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-2xl">
@@ -145,7 +157,8 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
               size="sm"
               onClick={handleGenerate}
               loading={generating}
-              disabled={chaosTabIds.length === 0}
+              disabled={generateDisabled}
+              title={generateDisabled && !!generated ? t('digestTab.notModified') : undefined}
               className="self-start"
             >
               <Zap size={14} />

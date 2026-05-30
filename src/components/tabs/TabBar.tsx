@@ -32,18 +32,23 @@ interface TabBarProps {
 interface SortableTabProps {
   tab: Tab
   isActive: boolean
+  isRenaming: boolean
   onSelect: () => void
   onRename: (title: string) => Promise<void>
-  onDelete: () => Promise<void>
+  onDoneRenaming: () => void
+  onMenuOpen: (rect: DOMRect) => void
+  menuOpen: boolean
 }
 
-function SortableTab({ tab, isActive, onSelect, onRename, onDelete }: SortableTabProps) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [editing, setEditing] = useState(false)
+function SortableTab({ tab, isActive, isRenaming, onSelect, onRename, onDoneRenaming, onMenuOpen, menuOpen }: SortableTabProps) {
   const [editTitle, setEditTitle] = useState(tab.title)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
   const isDescription = tab.type === 'description'
   const { t } = useTranslation()
+
+  useEffect(() => {
+    if (isRenaming) setEditTitle(tab.title)
+  }, [isRenaming, tab.title])
 
   const {
     attributes,
@@ -54,20 +59,17 @@ function SortableTab({ tab, isActive, onSelect, onRename, onDelete }: SortableTa
     isDragging,
   } = useSortable({ id: tab.id, disabled: isDescription })
 
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [])
-
   async function handleRename(e: React.FormEvent) {
     e.preventDefault()
     if (editTitle.trim() && editTitle !== tab.title) await onRename(editTitle.trim())
-    setEditing(false)
+    onDoneRenaming()
+  }
+
+  function handleMenuClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (menuButtonRef.current) {
+      onMenuOpen(menuButtonRef.current.getBoundingClientRect())
+    }
   }
 
   return (
@@ -87,20 +89,21 @@ function SortableTab({ tab, isActive, onSelect, onRename, onDelete }: SortableTa
         <span
           {...attributes}
           {...listeners}
-          className="cursor-grab text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="cursor-grab text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           onClick={(e) => e.stopPropagation()}
+          title={t('tabBar.drag')}
         >
-          <GripHorizontal size={12} />
+          <GripHorizontal size={13} />
         </span>
       )}
 
-      {editing ? (
+      {isRenaming ? (
         <form onSubmit={handleRename} onClick={(e) => e.stopPropagation()}>
           <input
             autoFocus
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
-            onBlur={() => { if (editTitle === tab.title) setEditing(false) }}
+            onBlur={onDoneRenaming}
             className="w-24 rounded border border-indigo-300 bg-white dark:bg-slate-700 px-1 py-0 text-sm text-slate-900 dark:text-slate-100 focus:outline-none"
           />
         </form>
@@ -109,32 +112,17 @@ function SortableTab({ tab, isActive, onSelect, onRename, onDelete }: SortableTa
       )}
 
       {!isDescription && (
-        <div ref={menuRef} className="relative" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => setMenuOpen((o) => !o)}
-            className="rounded p-0.5 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 hover:text-slate-500 dark:hover:text-slate-300 transition-opacity"
-            aria-label="Options"
-          >
-            <MoreVertical size={12} />
-          </button>
-
-          {menuOpen && (
-            <div className="absolute left-0 top-6 z-20 w-32 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg">
-              <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-                onClick={() => { setEditing(true); setMenuOpen(false) }}
-              >
-                {t('tabBar.rename')}
-              </button>
-              <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-slate-50 dark:hover:bg-slate-700"
-                onClick={() => { onDelete(); setMenuOpen(false) }}
-              >
-                {t('tabBar.delete')}
-              </button>
-            </div>
+        <button
+          ref={menuButtonRef}
+          onClick={handleMenuClick}
+          className={cn(
+            'rounded p-0.5 text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 hover:text-slate-600 dark:hover:text-slate-300 transition-opacity cursor-pointer',
+            menuOpen && 'opacity-100',
           )}
-        </div>
+          aria-label="Options"
+        >
+          <MoreVertical size={12} />
+        </button>
       )}
     </div>
   )
@@ -151,6 +139,29 @@ export function TabBar({
 }: TabBarProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const { t } = useTranslation()
+  const [openMenuTabId, setOpenMenuTabId] = useState<string | null>(null)
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuTabId(null)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  function handleMenuOpen(tabId: string, rect: DOMRect) {
+    if (openMenuTabId === tabId) {
+      setOpenMenuTabId(null)
+      return
+    }
+    setOpenMenuTabId(tabId)
+    setMenuPos({ left: rect.left, top: rect.bottom + 4 })
+  }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -161,30 +172,64 @@ export function TabBar({
     onReorderTabs(newOrder.map((tab) => tab.id))
   }
 
-  return (
-    <div className="flex items-end border-b border-slate-200 dark:border-slate-700 overflow-x-auto scrollbar-none bg-white dark:bg-slate-900">
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={tabs.map((tab) => tab.id)} strategy={horizontalListSortingStrategy}>
-          {tabs.map((tab) => (
-            <SortableTab
-              key={tab.id}
-              tab={tab}
-              isActive={tab.id === activeTabId}
-              onSelect={() => onSelectTab(tab.id)}
-              onRename={(title) => onRenameTab(tab.id, title)}
-              onDelete={() => onDeleteTab(tab.id)}
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
+  const openMenuTab = tabs.find((t) => t.id === openMenuTabId)
 
-      <button
-        onClick={onAddTab}
-        className="flex shrink-0 items-center gap-1 border-b-2 border-transparent px-3 py-2.5 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-        aria-label={t('tabBar.addTab')}
-      >
-        <Plus size={15} />
-      </button>
-    </div>
+  return (
+    <>
+      <div className="flex items-end border-b border-slate-200 dark:border-slate-700 overflow-x-auto scrollbar-none bg-white dark:bg-slate-900">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={tabs.map((tab) => tab.id)} strategy={horizontalListSortingStrategy}>
+            {tabs.map((tab) => (
+              <SortableTab
+                key={tab.id}
+                tab={tab}
+                isActive={tab.id === activeTabId}
+                isRenaming={renamingTabId === tab.id}
+                onSelect={() => onSelectTab(tab.id)}
+                onRename={(title) => onRenameTab(tab.id, title)}
+                onDoneRenaming={() => setRenamingTabId(null)}
+                onMenuOpen={(rect) => handleMenuOpen(tab.id, rect)}
+                menuOpen={openMenuTabId === tab.id}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+
+        <button
+          onClick={onAddTab}
+          className="flex shrink-0 items-center gap-1 border-b-2 border-transparent px-3 py-2.5 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+          aria-label={t('tabBar.addTab')}
+        >
+          <Plus size={15} />
+        </button>
+      </div>
+
+      {openMenuTab && menuPos && (
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', left: menuPos.left, top: menuPos.top }}
+          className="z-50 w-32 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg"
+        >
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+            onClick={() => {
+              setRenamingTabId(openMenuTab.id)
+              setOpenMenuTabId(null)
+            }}
+          >
+            {t('tabBar.rename')}
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+            onClick={() => {
+              onDeleteTab(openMenuTab.id)
+              setOpenMenuTabId(null)
+            }}
+          >
+            {t('tabBar.delete')}
+          </button>
+        </div>
+      )}
+    </>
   )
 }

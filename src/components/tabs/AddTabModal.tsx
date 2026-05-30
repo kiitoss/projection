@@ -19,27 +19,23 @@ export function AddTabModal({ open, onClose, onAdd, existingTabs }: AddTabModalP
   const [loading, setLoading] = useState(false)
   const { t } = useTranslation()
 
-  const hasTodo = existingTabs.some((tab) => tab.type === 'todo')
   const hasWidgets = existingTabs.some((tab) => tab.type === 'widgets')
   const chaosTabs = existingTabs.filter((tab) => tab.type === 'chaos')
   const hasChaos = chaosTabs.length > 0
 
   const tabTypes = [
-    { type: 'todo' as TabType, label: t('addTab.types.todo.label'), description: t('addTab.types.todo.description') },
     { type: 'chaos' as TabType, label: t('addTab.types.chaos.label'), description: t('addTab.types.chaos.description') },
     { type: 'digest' as TabType, label: t('addTab.types.digest.label'), description: t('addTab.types.digest.description') },
     { type: 'widgets' as TabType, label: t('addTab.types.widgets.label'), description: t('addTab.types.widgets.description') },
   ]
 
   function isDisabled(type: TabType) {
-    if (type === 'todo') return hasTodo
     if (type === 'widgets') return hasWidgets
     if (type === 'digest') return !hasChaos
     return false
   }
 
   function disabledReason(type: TabType) {
-    if (type === 'todo') return t('addTab.todoExists')
     if (type === 'widgets') return t('addTab.widgetsExists')
     if (type === 'digest') return t('addTab.noChaos')
     return ''
@@ -65,7 +61,6 @@ export function AddTabModal({ open, onClose, onAdd, existingTabs }: AddTabModalP
     setLoading(true)
 
     const config: Record<string, unknown> = {}
-    if (selected === 'todo') config.max_on_card = 5
     if (selected === 'digest') {
       config.chaos_tab_ids = selectedChaosIds
       config.prompt = t('digestTab.defaultPrompt')

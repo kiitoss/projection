@@ -1,5 +1,19 @@
-import { Plus, X } from 'lucide-react'
+import { Settings2, X, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import type { Tag } from '@/types'
@@ -8,12 +22,23 @@ interface SidebarProps {
   tags: Tag[]
   projectCountByTag: Record<string, number>
   totalCount: number
-  onCreateTag?: () => void
+  onManageTags?: () => void
+  onReorderTags?: (tags: Tag[]) => void
 }
 
-export function Sidebar({ tags, projectCountByTag, totalCount, onCreateTag }: SidebarProps) {
+export function Sidebar({ tags, projectCountByTag, totalCount, onManageTags, onReorderTags }: SidebarProps) {
   const { selectedTagIds, toggleTagFilter, clearTagFilters, sidebarOpen, setSidebarOpen } = useAppStore()
   const { t } = useTranslation()
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id || !onReorderTags) return
+    const oldIndex = tags.findIndex((t) => t.id === active.id)
+    const newIndex = tags.findIndex((t) => t.id === over.id)
+    onReorderTags(arrayMove(tags, oldIndex, newIndex))
+  }
 
   const content = (
     <nav className="flex h-full flex-col p-3">
@@ -21,21 +46,32 @@ export function Sidebar({ tags, projectCountByTag, totalCount, onCreateTag }: Si
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('sidebar.filters')}</span>
         <button
           onClick={() => setSidebarOpen(false)}
-          className="rounded-md p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          className="rounded-md p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
           aria-label={t('sidebar.close')}
         >
           <X size={16} />
         </button>
       </div>
 
-      <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-        {t('sidebar.tags')}
-      </p>
+      <div className="mb-2 flex items-center justify-between px-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          {t('sidebar.tags')}
+        </p>
+        {onManageTags && (
+          <button
+            onClick={onManageTags}
+            className="rounded p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            title={t('sidebar.manageTags')}
+          >
+            <Settings2 size={13} />
+          </button>
+        )}
+      </div>
 
       <button
         onClick={clearTagFilters}
         className={cn(
-          'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors',
+          'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors cursor-pointer',
           selectedTagIds.length === 0
             ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
             : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
@@ -45,42 +81,31 @@ export function Sidebar({ tags, projectCountByTag, totalCount, onCreateTag }: Si
         <span className="text-xs text-slate-400">{totalCount}</span>
       </button>
 
-      <div className="mt-1 flex flex-col gap-0.5">
-        {tags.map((tag) => (
-          <button
-            key={tag.id}
-            onClick={() => toggleTagFilter(tag.id)}
-            className={cn(
-              'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors',
-              selectedTagIds.includes(tag.id)
-                ? 'font-medium'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
-            )}
-            style={
-              selectedTagIds.includes(tag.id)
-                ? { backgroundColor: `${tag.color}20`, color: tag.color }
-                : {}
-            }
-          >
-            <span className="flex items-center gap-2">
-              <span
-                className="h-2 w-2 rounded-full shrink-0"
-                style={{ backgroundColor: tag.color }}
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <SortableContext items={tags.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+          <div className="mt-1 flex flex-col gap-0.5">
+            {tags.map((tag) => (
+              <SortableTag
+                key={tag.id}
+                tag={tag}
+                selected={selectedTagIds.includes(tag.id)}
+                count={projectCountByTag[tag.id] ?? 0}
+                onClick={() => toggleTagFilter(tag.id)}
               />
-              {tag.name}
-            </span>
-            <span className="text-xs text-slate-400">{projectCountByTag[tag.id] ?? 0}</span>
-          </button>
-        ))}
-      </div>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
 
-      <button
-        onClick={onCreateTag}
-        className="mt-3 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-      >
-        <Plus size={14} />
-        {t('sidebar.createTag')}
-      </button>
+      {onManageTags && (
+        <button
+          onClick={onManageTags}
+          className="mt-2 flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+        >
+          <Plus size={12} />
+          {t('sidebar.createTag')}
+        </button>
+      )}
     </nav>
   )
 
@@ -102,5 +127,46 @@ export function Sidebar({ tags, projectCountByTag, totalCount, onCreateTag }: Si
         </div>
       )}
     </>
+  )
+}
+
+function SortableTag({
+  tag,
+  selected,
+  count,
+  onClick,
+}: {
+  tag: Tag
+  selected: boolean
+  count: number
+  onClick: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tag.id })
+
+  return (
+    <button
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        ...(selected ? { backgroundColor: `${tag.color}20`, color: tag.color } : {}),
+      }}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors cursor-pointer',
+        selected
+          ? 'font-medium'
+          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
+        isDragging && 'opacity-50',
+      )}
+    >
+      <span className="flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+        {tag.name}
+      </span>
+      <span className="text-xs text-slate-400">{count}</span>
+    </button>
   )
 }

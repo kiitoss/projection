@@ -19,6 +19,7 @@
     "menu": "Menu",
     "offline": "Hors ligne",
     "regenerateWidgets": "Regénérer tous les widgets",
+    "regenerateAll": "Tout regénérer",
     "widgets": "Widgets",
     "newProject": "+ Nouveau projet",
     "userMenu": "Menu utilisateur",
@@ -30,7 +31,8 @@
     "close": "Fermer",
     "tags": "Tags",
     "all": "Tous",
-    "createTag": "Créer un tag"
+    "createTag": "Créer un tag",
+    "manageTags": "Gérer les tags"
   },
   "home": {
     "searchPlaceholder": "Rechercher un projet...",
@@ -40,6 +42,10 @@
     "createProject": "Créer un projet",
     "noResults": "Aucun projet ne correspond à ce filtre",
     "resetFilters": "Réinitialiser les filtres"
+  },
+  "projectCard": {
+    "todos": "Todo",
+    "goToTodos": "Voir les tâches"
   },
   "project": {
     "breadcrumb": "Projets",
@@ -51,7 +57,15 @@
     "deleteTitle": "Supprimer \"{{name}}\" ?",
     "deleteDescription": "Cette action est irréversible. Toutes les données du projet seront supprimées définitivement.",
     "deleteTabTitle": "Supprimer l'onglet \"{{title}}\" ?",
-    "deleteTabDescription": "Toutes les données de cet onglet seront supprimées définitivement."
+    "deleteTabDescription": "Toutes les données de cet onglet seront supprimées définitivement.",
+    "regenAllTitle": "Tout regénérer ?",
+    "regenAllDescription": "{{digests}} digest(s) et {{widgets}} widget(s) ont des modifications non regénérées et seront mis à jour.",
+    "regenAllConfirm": "Regénérer",
+    "regenAllSuccess": "Regénération terminée",
+    "regenDigestError": "Erreur lors de la regénération d'un digest",
+    "regenWidgetsError": "Erreur lors de la regénération des widgets",
+    "nothingToRegen": "Tout est à jour",
+    "regenProgress": "Génération en cours... ({{current}}/{{total}})"
   },
   "createProject": {
     "title": "Nouveau projet",
@@ -67,7 +81,8 @@
   "tabBar": {
     "addTab": "Ajouter un onglet",
     "rename": "Renommer",
-    "delete": "Supprimer"
+    "delete": "Supprimer",
+    "drag": "Glisser pour réordonner"
   },
   "addTab": {
     "title": "Ajouter un onglet",
@@ -118,7 +133,7 @@
   },
   "todoTab": {
     "show": "Afficher",
-    "urgentOnCard": "urgences sur la card",
+    "importantOnCard": "importantes sur la card",
     "filterAll": "Toutes",
     "filterActive": "Actives",
     "filterCompleted": "Complétées",
@@ -130,7 +145,7 @@
     "move": "Déplacer",
     "outdent": "Désindenter (Shift+Tab)",
     "indent": "Indenter (Tab)",
-    "markUrgent": "Marquer comme urgent",
+    "markImportant": "Marquer comme important",
     "cardLimit": "Limite de la card ({{max}})"
   },
   "chaosTab": {
@@ -150,7 +165,8 @@
     "noKeyError": "Configurez votre clé Gemini dans les Paramètres",
     "emptyContextError": "Les onglets Chaos sources sont vides",
     "generated": "Digest généré",
-    "generateError": "Erreur lors de la génération. Vérifiez votre clé Gemini."
+    "generateError": "Erreur lors de la génération. Vérifiez votre clé Gemini.",
+    "notModified": "Aucune modification du Chaos depuis la dernière génération"
   },
   "widgetsTab": {
     "header": "Widgets ({{count}})",
@@ -174,6 +190,7 @@
     "regenerateAllSuccess": "Tous les widgets ont été regénérés",
     "widgetError": "Erreur pour le widget \"{{title}}\"",
     "noKeyError": "Configurez votre clé Gemini dans les Paramètres",
+    "notModified": "Aucune modification depuis la dernière génération",
     "presets": {
       "topTodos": "5 todos prioritaires",
       "topTodosPrompt": "En te basant sur le contenu de ce projet, liste les 5 tâches les plus prioritaires à accomplir.",
@@ -214,7 +231,8 @@
       "close": "✕",
       "createTag": "+ Créer un tag",
       "deleteTitle": "Supprimer le tag \"{{name}}\" ?",
-      "deleteDescription": "Le tag sera retiré de tous les projets associés."
+      "deleteDescription": "Le tag sera retiré de tous les projets associés.",
+      "empty": "Aucun tag. Créez-en un ci-dessous."
     }
   },
   "toasts": {

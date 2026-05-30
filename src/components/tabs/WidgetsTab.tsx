@@ -35,6 +35,7 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
   const [widgets, setWidgets] = useState<Widget[]>([])
   const [addOpen, setAddOpen] = useState(false)
   const [confirmRegenAll, setConfirmRegenAll] = useState(false)
+  const [chaosMaxUpdatedAt, setChaosMaxUpdatedAt] = useState<Date | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const { t } = useTranslation()
 
@@ -47,7 +48,37 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
     setWidgets((data as Widget[]) ?? [])
   }, [tab.id])
 
+  const fetchChaosInfo = useCallback(async () => {
+    const { data: chaosTabs } = await supabase
+      .from('tabs')
+      .select('id')
+      .eq('project_id', project.id)
+      .eq('type', 'chaos')
+
+    if (!chaosTabs?.length) return
+
+    const { data: chaosRows } = await supabase
+      .from('chaos_content')
+      .select('updated_at')
+      .in('tab_id', (chaosTabs as { id: string }[]).map((t) => t.id))
+
+    if (chaosRows?.length) {
+      setChaosMaxUpdatedAt(
+        new Date(
+          Math.max(...(chaosRows as { updated_at: string }[]).map((r) => new Date(r.updated_at).getTime())),
+        ),
+      )
+    }
+  }, [project.id])
+
   useEffect(() => { fetchWidgets() }, [fetchWidgets])
+  useEffect(() => { fetchChaosInfo() }, [fetchChaosInfo])
+
+  function isWidgetStale(widget: Widget): boolean {
+    if (!widget.last_generated_at) return true
+    if (!chaosMaxUpdatedAt) return true
+    return chaosMaxUpdatedAt > new Date(widget.last_generated_at)
+  }
 
   async function getContext() {
     const { data: chaosTabs } = await supabase
@@ -89,8 +120,8 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
   }
 
   async function getApiKey() {
-    const { data } = await supabase.from('user_settings').select('gemini_api_key').single()
-    return data?.gemini_api_key ?? null
+    const { data } = await supabase.rpc('get_gemini_key')
+    return data ?? null
   }
 
   async function generateWidget(widget: Widget) {
@@ -101,18 +132,21 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
     }
     const context = await getContext()
     const content = await generateWithGemini(apiKey, widget.prompt, context)
+    const now = new Date().toISOString()
     const { error } = await supabase
       .from('widgets')
-      .update({ content, last_generated_at: new Date().toISOString() })
+      .update({ content, last_generated_at: now })
       .eq('id', widget.id)
     if (!error) {
       setWidgets((prev) =>
         prev.map((w) =>
-          w.id === widget.id ? { ...w, content, last_generated_at: new Date().toISOString() } : w,
+          w.id === widget.id ? { ...w, content, last_generated_at: now } : w,
         ),
       )
     }
   }
+
+  const staleWidgets = widgets.filter(isWidgetStale)
 
   async function handleRegenAll() {
     const apiKey = await getApiKey()
@@ -121,12 +155,13 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
       return
     }
     const context = await getContext()
-    for (const widget of widgets) {
+    const now = new Date().toISOString()
+    for (const widget of staleWidgets) {
       try {
         const content = await generateWithGemini(apiKey, widget.prompt, context)
         await supabase
           .from('widgets')
-          .update({ content, last_generated_at: new Date().toISOString() })
+          .update({ content, last_generated_at: now })
           .eq('id', widget.id)
       } catch {
         toast.error(t('widgetsTab.widgetError', { title: widget.title }))
@@ -176,7 +211,9 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => widgets.length > 1 ? setConfirmRegenAll(true) : handleRegenAll()}
+              onClick={() => setConfirmRegenAll(true)}
+              disabled={staleWidgets.length === 0}
+              title={staleWidgets.length === 0 ? t('widgetsTab.notModified') : undefined}
             >
               <RefreshCw size={13} />
               {t('widgetsTab.regenerateAll')}
@@ -196,6 +233,7 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
               <SortableWidget
                 key={widget.id}
                 widget={widget}
+                isStale={isWidgetStale(widget)}
                 onRegenerate={() => generateWidget(widget)}
                 onUpdate={(updates) => updateWidget(widget.id, updates)}
                 onDelete={() => deleteWidget(widget.id)}
@@ -227,7 +265,7 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
         open={confirmRegenAll}
         onClose={() => setConfirmRegenAll(false)}
         onConfirm={handleRegenAll}
-        title={t('widgetsTab.regenerateAllTitle', { count: widgets.length })}
+        title={t('widgetsTab.regenerateAllTitle', { count: staleWidgets.length })}
         description={t('widgetsTab.regenerateAllDescription')}
         confirmLabel={t('widgetsTab.regenerate')}
       />
@@ -237,12 +275,13 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
 
 interface SortableWidgetProps {
   widget: Widget
+  isStale: boolean
   onRegenerate: () => Promise<void>
   onUpdate: (updates: Partial<Widget>) => Promise<void>
   onDelete: () => Promise<void>
 }
 
-function SortableWidget({ widget, onRegenerate, onUpdate, onDelete }: SortableWidgetProps) {
+function SortableWidget({ widget, isStale, onRegenerate, onUpdate, onDelete }: SortableWidgetProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: widget.id,
   })
@@ -294,9 +333,9 @@ function SortableWidget({ widget, onRegenerate, onUpdate, onDelete }: SortableWi
           </button>
           <button
             onClick={handleRegen}
-            disabled={generating}
-            className="rounded p-1 text-slate-400 hover:text-indigo-500 disabled:opacity-50"
-            title={t('widgetsTab.regenerate')}
+            disabled={generating || !isStale}
+            className="rounded p-1 text-slate-400 hover:text-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={!isStale ? t('widgetsTab.notModified') : t('widgetsTab.regenerate')}
           >
             {generating ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
@@ -306,7 +345,7 @@ function SortableWidget({ widget, onRegenerate, onUpdate, onDelete }: SortableWi
           </button>
           <button
             onClick={onDelete}
-            className="rounded p-1 text-slate-400 hover:text-red-500"
+            className="rounded p-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
             title={t('common.delete')}
           >
             <Trash2 size={13} />

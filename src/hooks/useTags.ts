@@ -17,6 +17,7 @@ export function useTags() {
       .from('tags')
       .select('*')
       .eq('user_id', user.id)
+      .order('position')
       .order('name')
 
     if (error) toast.error(t('toasts.tagsLoadError'))
@@ -30,7 +31,7 @@ export function useTags() {
     if (!user) return null
     const { data, error } = await supabase
       .from('tags')
-      .insert({ user_id: user.id, name: name.trim(), color })
+      .insert({ user_id: user.id, name: name.trim(), color, position: tags.length })
       .select()
       .single()
 
@@ -51,5 +52,14 @@ export function useTags() {
     else { toast.success(t('toasts.tagDeleted')); await fetchTags() }
   }
 
-  return { tags, loading, createTag, updateTag, deleteTag, refetch: fetchTags }
+  async function reorderTags(reordered: Tag[]) {
+    setTags(reordered)
+    await Promise.all(
+      reordered.map((tag, i) =>
+        supabase.from('tags').update({ position: i }).eq('id', tag.id)
+      )
+    )
+  }
+
+  return { tags, loading, createTag, updateTag, deleteTag, reorderTags, refetch: fetchTags }
 }

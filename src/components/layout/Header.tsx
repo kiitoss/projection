@@ -10,10 +10,10 @@ import { useState, useRef, useEffect } from 'react'
 interface HeaderProps {
   onNewProject?: () => void
   onRegenerateAll?: () => void
-  hasWidgets?: boolean
+  regenerateLoading?: boolean
 }
 
-export function Header({ onNewProject, onRegenerateAll, hasWidgets }: HeaderProps) {
+export function Header({ onNewProject, onRegenerateAll, regenerateLoading }: HeaderProps) {
   const { user, signOut } = useAuth()
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -56,16 +56,17 @@ export function Header({ onNewProject, onRegenerateAll, hasWidgets }: HeaderProp
         </span>
       )}
 
-      {hasWidgets && onRegenerateAll && (
+      {onRegenerateAll && (
         <Button
           variant="ghost"
           size="sm"
           onClick={onRegenerateAll}
+          loading={regenerateLoading}
           className="hidden sm:inline-flex"
-          title={t('header.regenerateWidgets')}
+          title={t('header.regenerateAll')}
         >
           <Zap size={15} />
-          <span className="hidden md:inline">{t('header.widgets')}</span>
+          <span className="hidden md:inline">{t('header.regenerateAll')}</span>
         </Button>
       )}
 

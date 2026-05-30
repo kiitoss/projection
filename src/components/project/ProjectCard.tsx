@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MoreVertical, Globe, CheckSquare, Archive, Trash2, Pencil } from 'lucide-react'
+import { MoreVertical, Globe, Archive, Trash2, Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { TagPill } from '@/components/ui/TagPill'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
-import type { ProjectWithRelations } from '@/types'
+import { supabase } from '@/lib/supabase'
+import type { ProjectWithRelations, CardTodo } from '@/types'
 
 interface ProjectCardProps {
   project: ProjectWithRelations
@@ -20,6 +21,7 @@ export function ProjectCard({ project, onDelete, onArchive, onRename }: ProjectC
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [newName, setNewName] = useState(project.name)
+  const [displayedTodos, setDisplayedTodos] = useState<CardTodo[]>(project.urgent_todos ?? [])
   const menuRef = useRef<HTMLDivElement>(null)
   const { t } = useTranslation()
 
@@ -33,6 +35,10 @@ export function ProjectCard({ project, onDelete, onArchive, onRename }: ProjectC
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
+  useEffect(() => {
+    setDisplayedTodos(project.urgent_todos ?? [])
+  }, [project.urgent_todos])
+
   async function handleDelete() {
     await onDelete(project.id)
     setConfirmDelete(false)
@@ -45,7 +51,13 @@ export function ProjectCard({ project, onDelete, onArchive, onRename }: ProjectC
     setRenaming(false)
   }
 
-  const urgentTodos: string[] = []
+  async function handleTodoCheck(todoId: string) {
+    const todo = displayedTodos.find((t) => t.id === todoId)
+    if (!todo) return
+    const newCompleted = !todo.completed
+    setDisplayedTodos((prev) => prev.map((t) => t.id === todoId ? { ...t, completed: newCompleted } : t))
+    await supabase.from('todos').update({ completed: newCompleted }).eq('id', todoId)
+  }
 
   return (
     <>
@@ -132,7 +144,7 @@ export function ProjectCard({ project, onDelete, onArchive, onRename }: ProjectC
         {project.show_key_points_on_card && project.key_points.length > 0 && (
           <div>
             <ul className="flex flex-col gap-0.5">
-              {project.key_points.slice(0, project.max_key_points_on_card).map((kp, i) => (
+              {project.key_points.filter((kp) => kp.trim()).slice(0, project.max_key_points_on_card).map((kp, i) => (
                 <li key={i} className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-300">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" />
                   <span className="line-clamp-1">{kp}</span>
@@ -142,19 +154,24 @@ export function ProjectCard({ project, onDelete, onArchive, onRename }: ProjectC
           </div>
         )}
 
-        {urgentTodos.length > 0 && (
-          <div>
-            <p className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-              <CheckSquare size={11} />
-              {t('descriptionTab.urgences')}
-            </p>
-            <ul className="flex flex-col gap-0.5">
-              {urgentTodos.map((todo, i) => (
-                <li key={i} className="text-xs text-slate-600 dark:text-slate-300 line-clamp-1">
-                  {todo}
-                </li>
-              ))}
-            </ul>
+        {displayedTodos.length > 0 && (
+          <div data-no-nav className="flex flex-col gap-1 border-t border-slate-100 dark:border-slate-700 pt-2">
+            {displayedTodos.map((todo) => (
+              <label key={todo.id} className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={todo.completed}
+                  onChange={() => handleTodoCheck(todo.id)}
+                  className="h-3 w-3 shrink-0 rounded border-slate-300 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className={cn(
+                  'text-xs line-clamp-1',
+                  todo.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300',
+                )}>
+                  {todo.content}
+                </span>
+              </label>
+            ))}
           </div>
         )}
       </div>
@@ -186,7 +203,7 @@ function MenuItem({
     <button
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700',
+        'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer',
         danger
           ? 'text-red-500 hover:text-red-600'
           : 'text-slate-700 dark:text-slate-200',

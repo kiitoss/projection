@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -18,8 +18,6 @@ const sizes = {
 }
 
 export function Modal({ open, onClose, title, children, className, size = 'md' }: ModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
@@ -32,12 +30,8 @@ export function Modal({ open, onClose, title, children, className, size = 'md' }
   if (!open) return null
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
-    >
-      <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" aria-hidden="true" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
@@ -53,7 +47,7 @@ export function Modal({ open, onClose, title, children, className, size = 'md' }
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
             <button
               onClick={onClose}
-              className="rounded-md p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="rounded-md p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               aria-label="Fermer"
             >
               <X size={16} />

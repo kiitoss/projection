@@ -18,18 +18,23 @@ import { GripVertical, AlertCircle, Trash2, ChevronRight, ChevronLeft } from 'lu
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
-import type { Tab, Todo, TodoTabConfig } from '@/types'
+import { toast } from '@/store/useAppStore'
+import type { Tab, Todo, TodoListConfig } from '@/types'
 
-interface TodoTabProps {
+interface TodoListProps {
   tab: Tab
   onUpdateTab: (updates: Partial<Tab>) => Promise<void>
+  className?: string
 }
 
-export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
-  const config = tab.config as unknown as TodoTabConfig
+export function TodoList({ tab, onUpdateTab, className }: TodoListProps) {
+  const config = tab.config as unknown as TodoListConfig
   const maxOnCard = config?.max_on_card ?? 5
   const [todos, setTodos] = useState<Todo[]>([])
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all')
+  const [newTodoId, setNewTodoId] = useState<string | null>(null)
+  // Maps todo.id → stable React key so remounting doesn't occur when tempId is replaced by realId
+  const stableKeys = useRef(new Map<string, string>())
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const { t } = useTranslation()
 
@@ -45,23 +50,61 @@ export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
   useEffect(() => { fetchTodos() }, [fetchTodos])
 
   async function renormalizePositions(list: Todo[]) {
-    for (let i = 0; i < list.length; i++) {
-      await supabase.from('todos').update({ position: i }).eq('id', list[i].id)
-    }
+    await supabase
+      .from('todos')
+      .upsert(list.map((t, i) => ({ ...t, position: i })))
   }
 
   async function addTodo(parentId?: string, level = 0, afterPosition?: number) {
-    const position = afterPosition !== undefined ? afterPosition + 0.5 : todos.length
+    const position = afterPosition !== undefined ? afterPosition + 1 : todos.length
+    const tempId = crypto.randomUUID()
+    const optimisticTodo: Todo = {
+      id: tempId,
+      tab_id: tab.id,
+      content: '',
+      completed: false,
+      urgent: false,
+      position,
+      parent_id: parentId ?? null,
+      level,
+      created_at: new Date().toISOString(),
+    }
+
+    let newList: Todo[]
+    if (afterPosition !== undefined) {
+      const idx = todos.findIndex((t) => t.position === afterPosition)
+      newList = idx >= 0
+        ? [...todos.slice(0, idx + 1), optimisticTodo, ...todos.slice(idx + 1)]
+        : [...todos, optimisticTodo]
+    } else {
+      newList = [...todos, optimisticTodo]
+    }
+
+    stableKeys.current.set(tempId, tempId)
+    setTodos(newList)
+    setNewTodoId(tempId)
+
     const { data, error } = await supabase
       .from('todos')
       .insert({ tab_id: tab.id, content: '', position, parent_id: parentId ?? null, level })
       .select()
       .single()
-    if (!error && data) {
-      const newList = [...todos, data as Todo].sort((a, b) => a.position - b.position)
-      await renormalizePositions(newList)
-      await fetchTodos()
+
+    if (error) {
+      toast.error(t('toasts.tabAddError'))
+      setTodos(todos)
+      setNewTodoId(null)
+      return
     }
+
+    const realTodo = data as Todo
+    const finalList = newList.map((t) => (t.id === tempId ? realTodo : t))
+    // Reuse the same React key so the component isn't remounted (no focus loss)
+    stableKeys.current.set(realTodo.id, tempId)
+    setTodos(finalList)
+    setNewTodoId(null)
+    // Renormalize positions in background — not worth blocking the UI
+    renormalizePositions(finalList).catch(() => {})
   }
 
   async function updateTodo(id: string, updates: Partial<Todo>) {
@@ -69,24 +112,33 @@ export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
     setTodos((prev) => prev.map((todo) => (todo.id === id ? { ...todo, ...updates } : todo)))
   }
 
-  async function deleteTodo(id: string) {
+  async function deleteTodo(id: string, focusPrevId?: string | null) {
+    const prevEl = focusPrevId
+      ? document.querySelector<HTMLInputElement>(`[data-todo-id="${focusPrevId}"]`)
+      : null
+    setTodos((prev) => prev.filter((t) => t.id !== id))
+    if (prevEl) {
+      requestAnimationFrame(() => {
+        prevEl.focus()
+        prevEl.setSelectionRange(prevEl.value.length, prevEl.value.length)
+      })
+    }
     await supabase.from('todos').delete().eq('id', id)
-    await fetchTodos()
   }
 
   async function indentTodo(id: string) {
-    const todo = todos.find((todo) => todo.id === id)
+    const todo = todos.find((t) => t.id === id)
     if (!todo || todo.level >= 4) return
-    const siblings = todos.filter((todo2) => todo2.parent_id === todo.parent_id && todo2.position < todo.position)
+    const siblings = todos.filter((t) => t.parent_id === todo.parent_id && t.position < todo.position)
     const newParent = siblings[siblings.length - 1]
     if (!newParent) return
     await updateTodo(id, { level: todo.level + 1, parent_id: newParent.id })
   }
 
   async function unindentTodo(id: string) {
-    const todo = todos.find((todo) => todo.id === id)
+    const todo = todos.find((t) => t.id === id)
     if (!todo || todo.level === 0) return
-    const parent = todos.find((todo) => todo.id === todo.parent_id)
+    const parent = todos.find((t) => t.id === todo.parent_id)
     await updateTodo(id, { level: todo.level - 1, parent_id: parent?.parent_id ?? null })
   }
 
@@ -106,7 +158,7 @@ export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
     return true
   })
 
-  const urgentTodos = todos.filter((todo) => !todo.completed && todo.urgent)
+  const importantTodos = todos.filter((todo) => !todo.completed && todo.urgent)
 
   function emptyMessage() {
     if (filter === 'active') return t('todoTab.emptyActive')
@@ -115,7 +167,7 @@ export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
   }
 
   return (
-    <div className="flex flex-col max-w-2xl">
+    <div className={cn('flex flex-col', className ?? 'max-w-2xl')}>
       <div className="flex items-center gap-4 border-b border-slate-200 dark:border-slate-700 px-6 py-3 bg-white dark:bg-slate-900">
         <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           {t('todoTab.show')}
@@ -129,7 +181,7 @@ export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
             }
             className="w-12 rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-0.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
-          {t('todoTab.urgentOnCard')}
+          {t('todoTab.importantOnCard')}
         </label>
 
         <div className="ml-auto flex text-xs border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
@@ -155,16 +207,22 @@ export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
           <SortableContext items={visibleTodos.map((todo) => todo.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-0.5">
               {visibleTodos.map((todo, i) => {
-                const urgentIndex = urgentTodos.findIndex((u) => u.id === todo.id)
+                const importantIndex = importantTodos.findIndex((u) => u.id === todo.id)
+
                 const showCardLimit =
                   filter !== 'completed' &&
-                  urgentIndex === maxOnCard - 1 &&
+                  importantIndex === maxOnCard - 1 &&
+                  importantTodos.length > maxOnCard &&
                   i < visibleTodos.length - 1
 
+                const stableKey = stableKeys.current.get(todo.id) ?? todo.id
+
                 return (
-                  <div key={todo.id}>
+                  <div key={stableKey}>
                     <SortableTodoItem
                       todo={todo}
+                      isNew={todo.id === newTodoId}
+                      prevTodoId={i > 0 ? visibleTodos[i - 1].id : null}
                       onUpdate={updateTodo}
                       onDelete={deleteTodo}
                       onIndent={indentTodo}
@@ -191,7 +249,7 @@ export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
 
         <button
           onClick={() => addTodo()}
-          className="mt-3 flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 transition-colors"
+          className="mt-3 flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 transition-colors cursor-pointer"
         >
           {t('todoTab.addTodo')}
         </button>
@@ -202,8 +260,10 @@ export function TodoTab({ tab, onUpdateTab }: TodoTabProps) {
 
 interface SortableTodoItemProps {
   todo: Todo
+  isNew?: boolean
+  prevTodoId: string | null
   onUpdate: (id: string, updates: Partial<Todo>) => Promise<void>
-  onDelete: (id: string) => Promise<void>
+  onDelete: (id: string, focusPrevId?: string | null) => Promise<void>
   onIndent: (id: string) => Promise<void>
   onUnindent: (id: string) => Promise<void>
   onAddAfter: (parentId: string | null, level: number) => Promise<void>
@@ -211,6 +271,8 @@ interface SortableTodoItemProps {
 
 function SortableTodoItem({
   todo,
+  isNew,
+  prevTodoId,
   onUpdate,
   onDelete,
   onIndent,
@@ -222,7 +284,12 @@ function SortableTodoItem({
   })
   const [content, setContent] = useState(todo.content)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const { t } = useTranslation()
+
+  useEffect(() => {
+    if (isNew) inputRef.current?.focus()
+  }, [isNew])
 
   function handleContentChange(v: string) {
     setContent(v)
@@ -233,7 +300,11 @@ function SortableTodoItem({
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
       e.preventDefault()
-      onAddAfter(todo.parent_id, todo.level)
+      onAddAfter(null, 0)
+    }
+    if (e.key === 'Backspace' && !content) {
+      e.preventDefault()
+      onDelete(todo.id, prevTodoId)
     }
     if (e.key === 'Tab') {
       e.preventDefault()
@@ -250,7 +321,11 @@ function SortableTodoItem({
         transition,
         paddingLeft: `${todo.level * 24}px`,
       }}
-      className={cn('group flex items-center gap-2 py-1', isDragging && 'opacity-50')}
+      className={cn(
+        'group flex items-center gap-2 py-1 rounded-md',
+        isDragging && 'opacity-50',
+        todo.urgent && 'bg-amber-50 dark:bg-amber-900/20 px-2',
+      )}
     >
       <button
         {...attributes}
@@ -269,6 +344,8 @@ function SortableTodoItem({
       />
 
       <input
+        ref={inputRef}
+        data-todo-id={todo.id}
         value={content}
         onChange={(e) => handleContentChange(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -284,7 +361,7 @@ function SortableTodoItem({
           onClick={() => onUnindent(todo.id)}
           disabled={todo.level === 0}
           title={t('todoTab.outdent')}
-          className="rounded p-0.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 disabled:opacity-30"
+          className="rounded p-0.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 disabled:opacity-30 cursor-pointer"
         >
           <ChevronLeft size={13} />
         </button>
@@ -292,15 +369,15 @@ function SortableTodoItem({
           onClick={() => onIndent(todo.id)}
           disabled={todo.level >= 4}
           title={t('todoTab.indent')}
-          className="rounded p-0.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 disabled:opacity-30"
+          className="rounded p-0.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 disabled:opacity-30 cursor-pointer"
         >
           <ChevronRight size={13} />
         </button>
         <button
           onClick={() => onUpdate(todo.id, { urgent: !todo.urgent })}
-          title={t('todoTab.markUrgent')}
+          title={t('todoTab.markImportant')}
           className={cn(
-            'rounded p-0.5 transition-colors',
+            'rounded p-0.5 transition-colors cursor-pointer',
             todo.urgent
               ? 'text-amber-500'
               : 'text-slate-300 dark:text-slate-600 hover:text-amber-400',
@@ -311,7 +388,7 @@ function SortableTodoItem({
         <button
           onClick={() => onDelete(todo.id)}
           title={t('common.delete')}
-          className="rounded p-0.5 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+          className="rounded p-0.5 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors cursor-pointer"
         >
           <Trash2 size={13} />
         </button>

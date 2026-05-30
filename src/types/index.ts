@@ -1,10 +1,11 @@
-export type TabType = 'description' | 'todo' | 'chaos' | 'digest' | 'widgets'
+export type TabType = 'description' | 'chaos' | 'digest' | 'widgets'
 
 export interface Tag {
   id: string
   user_id: string
   name: string
   color: string
+  position: number
 }
 
 export interface ProjectLink {
@@ -24,7 +25,7 @@ export interface Tab {
   config: Record<string, unknown>
 }
 
-export interface TodoTabConfig {
+export interface TodoListConfig {
   max_on_card: number
 }
 
@@ -48,18 +49,6 @@ export interface Project {
   updated_at: string
 }
 
-// Shape returned by Supabase with nested joins
-export interface ProjectRow extends Project {
-  project_tags: { tags: Tag }[]
-  project_links: ProjectLink[]
-}
-
-// Normalized shape used in the app
-export interface ProjectWithRelations extends Project {
-  tags: Tag[]
-  project_links: ProjectLink[]
-}
-
 export interface Todo {
   id: string
   tab_id: string
@@ -70,6 +59,34 @@ export interface Todo {
   parent_id: string | null
   level: number
   created_at: string
+}
+
+// Intermediate shape for tabs+todos nested in the project query
+interface ProjectTabRow {
+  id: string
+  type: string
+  config: Record<string, unknown>
+  todos: Pick<Todo, 'id' | 'content' | 'urgent' | 'completed' | 'position'>[]
+}
+
+// Shape returned by Supabase with nested joins
+export interface ProjectRow extends Project {
+  project_tags: { tags: Tag }[]
+  project_links: ProjectLink[]
+  tabs?: ProjectTabRow[]
+}
+
+export interface CardTodo {
+  id: string
+  content: string
+  completed: boolean
+}
+
+// Normalized shape used in the app
+export interface ProjectWithRelations extends Project {
+  tags: Tag[]
+  project_links: ProjectLink[]
+  urgent_todos?: CardTodo[]
 }
 
 export interface ChaosContent {

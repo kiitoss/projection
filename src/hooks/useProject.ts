@@ -118,9 +118,28 @@ export function useProject(projectId: string) {
     else await fetchProject()
   }
 
+  async function addTagToProject(tagId: string) {
+    const { error } = await supabase
+      .from('project_tags')
+      .insert({ project_id: projectId, tag_id: tagId })
+    if (error) toast.error(t('toasts.projectUpdateError'))
+    else await fetchProject()
+  }
+
+  async function removeTagFromProject(tagId: string) {
+    const { error } = await supabase
+      .from('project_tags')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('tag_id', tagId)
+    if (error) toast.error(t('toasts.projectUpdateError'))
+    else await fetchProject()
+  }
+
   return {
     project, tabs, loading,
     updateProject, addTab, updateTab, deleteTab, reorderTabs,
-    addLink, deleteLink, refetch: fetchProject,
+    addLink, deleteLink, addTagToProject, removeTagFromProject,
+    refetch: fetchProject,
   }
 }

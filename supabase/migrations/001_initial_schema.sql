@@ -1,10 +1,11 @@
 -- ============================================================
--- Projection — Initial Schema
--- Run this in the Supabase SQL Editor
+-- Projection — Schema
+-- Run this in the Supabase SQL Editor on a fresh database.
 -- ============================================================
 
 -- Enable UUID extension (usually already enabled)
 create extension if not exists "uuid-ossp";
+create extension if not exists pgcrypto;
 
 -- ============================================================
 -- PROJECTS
@@ -28,10 +29,11 @@ create table projects (
 -- TAGS
 -- ============================================================
 create table tags (
-  id      uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  name    text not null,
-  color   text not null default '#6366f1'
+  id       uuid primary key default gen_random_uuid(),
+  user_id  uuid not null references auth.users(id) on delete cascade,
+  name     text not null,
+  color    text not null default '#6366f1',
+  position integer not null default 0
 );
 
 create table project_tags (
@@ -54,7 +56,7 @@ create table project_links (
 -- ============================================================
 -- TABS
 -- ============================================================
-create type tab_type as enum ('description', 'todo', 'chaos', 'digest', 'widgets');
+create type tab_type as enum ('description', 'chaos', 'digest', 'widgets');
 
 create table tabs (
   id         uuid primary key default gen_random_uuid(),
@@ -67,6 +69,7 @@ create table tabs (
 
 -- ============================================================
 -- TODOS
+-- Todos belong to a description tab (one per project).
 -- ============================================================
 create table todos (
   id         uuid primary key default gen_random_uuid(),
@@ -117,11 +120,61 @@ create table widgets (
 -- ============================================================
 -- USER SETTINGS
 -- ============================================================
+-- Requires: SELECT vault.create_secret('passphrase', 'gemini_encryption_key');
 create table user_settings (
   user_id        uuid primary key references auth.users(id) on delete cascade,
-  gemini_api_key text,
+  gemini_api_key bytea,
   theme          text not null default 'system' check (theme in ('light', 'dark', 'system'))
 );
+
+-- RPC : sauvegarder la clé chiffrée (passphrase stockée dans Vault)
+create or replace function save_gemini_key(key text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  passphrase text;
+begin
+  select decrypted_secret into passphrase
+  from vault.decrypted_secrets
+  where name = 'gemini_encryption_key';
+
+  update user_settings
+  set gemini_api_key = case
+    when key is null or key = '' then null
+    else pgp_sym_encrypt(key, passphrase)
+  end
+  where user_id = auth.uid();
+end;
+$$;
+
+-- RPC : lire la clé déchiffrée
+create or replace function get_gemini_key()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  passphrase text;
+  result     text;
+begin
+  select decrypted_secret into passphrase
+  from vault.decrypted_secrets
+  where name = 'gemini_encryption_key';
+
+  select case
+    when gemini_api_key is null then null
+    else pgp_sym_decrypt(gemini_api_key, passphrase)
+  end into result
+  from user_settings
+  where user_id = auth.uid();
+
+  return result;
+end;
+$$;
 
 -- ============================================================
 -- AUTO-UPDATE updated_at
@@ -156,34 +209,28 @@ alter table digest_generated enable row level security;
 alter table widgets enable row level security;
 alter table user_settings enable row level security;
 
--- Projects: direct user_id
 create policy "users own their projects"
   on projects for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Tags
 create policy "users own their tags"
   on tags for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Project tags (via project FK)
 create policy "users access their project_tags"
   on project_tags for all
   using (project_id in (select id from projects where user_id = auth.uid()));
 
--- Project links
 create policy "users access their project_links"
   on project_links for all
   using (project_id in (select id from projects where user_id = auth.uid()));
 
--- Tabs
 create policy "users access their tabs"
   on tabs for all
   using (project_id in (select id from projects where user_id = auth.uid()));
 
--- Todos
 create policy "users access their todos"
   on todos for all
   using (tab_id in (
@@ -192,7 +239,6 @@ create policy "users access their todos"
     where p.user_id = auth.uid()
   ));
 
--- Chaos content
 create policy "users access their chaos_content"
   on chaos_content for all
   using (tab_id in (
@@ -201,7 +247,6 @@ create policy "users access their chaos_content"
     where p.user_id = auth.uid()
   ));
 
--- Digest generated
 create policy "users access their digest_generated"
   on digest_generated for all
   using (tab_id in (
@@ -210,7 +255,6 @@ create policy "users access their digest_generated"
     where p.user_id = auth.uid()
   ));
 
--- Widgets
 create policy "users access their widgets"
   on widgets for all
   using (tab_id in (
@@ -219,7 +263,6 @@ create policy "users access their widgets"
     where p.user_id = auth.uid()
   ));
 
--- User settings
 create policy "users own their settings"
   on user_settings for all
   using (auth.uid() = user_id)
@@ -243,9 +286,6 @@ create trigger on_auth_user_created
 
 -- ============================================================
 -- REALTIME
--- Enable realtime for relevant tables in Supabase dashboard:
--- projects, tabs, todos, chaos_content, widgets
--- (or run: alter publication supabase_realtime add table ...)
 -- ============================================================
 alter publication supabase_realtime add table projects;
 alter publication supabase_realtime add table tabs;

@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { Plus, Trash2, Globe, GripVertical } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { cn } from '@/lib/utils'
+import { Toggle } from '@/components/ui/Toggle'
 import type { ProjectWithRelations } from '@/types'
 
 interface DescriptionTabProps {
@@ -24,9 +25,10 @@ interface DescriptionTabProps {
   onUpdate: (updates: Partial<ProjectWithRelations>) => Promise<void>
   onAddLink: (url: string, label?: string) => Promise<void>
   onDeleteLink: (id: string) => Promise<void>
+  className?: string
 }
 
-export function DescriptionTab({ project, onUpdate, onAddLink, onDeleteLink }: DescriptionTabProps) {
+export function DescriptionTab({ project, onUpdate, onAddLink, onDeleteLink, className }: DescriptionTabProps) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saved, setSaved] = useState(true)
 
@@ -40,7 +42,7 @@ export function DescriptionTab({ project, onUpdate, onAddLink, onDeleteLink }: D
   }, [])
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+    <div className={cn('flex flex-col gap-8 p-6', className ?? 'max-w-2xl')}>
       <SaveIndicator saved={saved} />
 
       <ShortDescSection project={project} onUpdate={onUpdate} debounce={debounce} />
@@ -77,15 +79,11 @@ function ShortDescSection({
         <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
           {t('descriptionTab.shortDesc')}
         </label>
-        <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={project.show_short_desc_on_card}
-            onChange={(e) => onUpdate({ show_short_desc_on_card: e.target.checked })}
-            className="rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
-          />
-          {t('descriptionTab.showOnCard')}
-        </label>
+        <Toggle
+          checked={project.show_short_desc_on_card}
+          onChange={(v) => onUpdate({ show_short_desc_on_card: v })}
+          label={t('descriptionTab.showOnCard')}
+        />
       </div>
       <input
         defaultValue={project.short_description ?? ''}
@@ -123,11 +121,18 @@ function LongDescSection({
   )
 }
 
-function SortablePoint({ id, value, onChange, onDelete }: {
-  id: string; value: string; onChange: (v: string) => void; onDelete: () => void
+function SortablePoint({ id, value, autoFocus, onChange, onDelete, onAddAfter }: {
+  id: string; value: string; autoFocus?: boolean
+  onChange: (v: string) => void; onDelete: () => void; onAddAfter: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const inputRef = useRef<HTMLInputElement>(null)
   const { t } = useTranslation()
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus()
+  }, [autoFocus])
+
   return (
     <div
       ref={setNodeRef}
@@ -143,14 +148,16 @@ function SortablePoint({ id, value, onChange, onDelete }: {
         <GripVertical size={14} />
       </button>
       <input
+        ref={inputRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAddAfter() } }}
         placeholder={t('descriptionTab.keyPointPlaceholder')}
         className="flex-1 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
       <button
         onClick={onDelete}
-        className="text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+        className="text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors cursor-pointer"
         aria-label={t('common.delete')}
       >
         <Trash2 size={14} />
@@ -167,6 +174,7 @@ function KeyPointsSection({
   onUpdate: (u: Partial<ProjectWithRelations>) => Promise<void>
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const { t } = useTranslation()
 
   function handleDragEnd(event: DragEndEvent) {
@@ -189,8 +197,16 @@ function KeyPointsSection({
     onUpdate({ key_points: newPoints })
   }
 
+  function addPointAfter(index: number) {
+    const newPoints = [...project.key_points]
+    newPoints.splice(index + 1, 0, '')
+    onUpdate({ key_points: newPoints })
+    setFocusIndex(index + 1)
+  }
+
   function addPoint() {
     onUpdate({ key_points: [...project.key_points, ''] })
+    setFocusIndex(project.key_points.length)
   }
 
   return (
@@ -212,15 +228,11 @@ function KeyPointsSection({
             />
             {t('descriptionTab.onCard')}
           </label>
-          <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={project.show_key_points_on_card}
-              onChange={(e) => onUpdate({ show_key_points_on_card: e.target.checked })}
-              className="rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
-            />
-            {t('descriptionTab.showOnCard')}
-          </label>
+          <Toggle
+            checked={project.show_key_points_on_card}
+            onChange={(v) => onUpdate({ show_key_points_on_card: v })}
+            label={t('descriptionTab.showOnCard')}
+          />
         </div>
       </div>
 
@@ -232,8 +244,10 @@ function KeyPointsSection({
                 key={`${i}-${point}`}
                 id={point}
                 value={point}
+                autoFocus={focusIndex === i}
                 onChange={(v) => updatePoint(i, v)}
                 onDelete={() => deletePoint(i)}
+                onAddAfter={() => addPointAfter(i)}
               />
             ))}
           </div>
@@ -242,7 +256,7 @@ function KeyPointsSection({
 
       <button
         onClick={addPoint}
-        className="mt-2 flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 transition-colors"
+        className="mt-2 flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 transition-colors cursor-pointer"
       >
         <Plus size={14} />
         {t('descriptionTab.addPoint')}
@@ -294,7 +308,7 @@ function LinksSection({
             </a>
             <button
               onClick={() => onDeleteLink(link.id)}
-              className="text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+              className="text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors cursor-pointer"
               aria-label={t('common.delete')}
             >
               <Trash2 size={13} />
@@ -327,7 +341,7 @@ function LinksSection({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-600 transition-colors cursor-pointer"
         >
           <Plus size={14} />
           {t('descriptionTab.addLink')}

@@ -19,6 +19,7 @@
     "menu": "Menu",
     "offline": "Offline",
     "regenerateWidgets": "Regenerate all widgets",
+    "regenerateAll": "Regenerate all",
     "widgets": "Widgets",
     "newProject": "+ New project",
     "userMenu": "User menu",
@@ -30,7 +31,8 @@
     "close": "Close",
     "tags": "Tags",
     "all": "All",
-    "createTag": "Create tag"
+    "createTag": "Create tag",
+    "manageTags": "Manage tags"
   },
   "home": {
     "searchPlaceholder": "Search a project...",
@@ -40,6 +42,10 @@
     "createProject": "Create a project",
     "noResults": "No project matches this filter",
     "resetFilters": "Reset filters"
+  },
+  "projectCard": {
+    "todos": "Todo",
+    "goToTodos": "Go to tasks"
   },
   "project": {
     "breadcrumb": "Projects",
@@ -51,7 +57,15 @@
     "deleteTitle": "Delete \"{{name}}\"?",
     "deleteDescription": "This action is irreversible. All project data will be permanently deleted.",
     "deleteTabTitle": "Delete tab \"{{title}}\"?",
-    "deleteTabDescription": "All data in this tab will be permanently deleted."
+    "deleteTabDescription": "All data in this tab will be permanently deleted.",
+    "regenAllTitle": "Regenerate all?",
+    "regenAllDescription": "{{digests}} digest(s) and {{widgets}} widget(s) have pending changes and will be updated.",
+    "regenAllConfirm": "Regenerate",
+    "regenAllSuccess": "Regeneration complete",
+    "regenDigestError": "Error regenerating a digest",
+    "regenWidgetsError": "Error regenerating widgets",
+    "nothingToRegen": "Everything is up to date",
+    "regenProgress": "Generating... ({{current}}/{{total}})"
   },
   "createProject": {
     "title": "New project",
@@ -67,7 +81,8 @@
   "tabBar": {
     "addTab": "Add tab",
     "rename": "Rename",
-    "delete": "Delete"
+    "delete": "Delete",
+    "drag": "Drag to reorder"
   },
   "addTab": {
     "title": "Add tab",
@@ -118,7 +133,7 @@
   },
   "todoTab": {
     "show": "Show",
-    "urgentOnCard": "urgent tasks on card",
+    "importantOnCard": "important tasks on card",
     "filterAll": "All",
     "filterActive": "Active",
     "filterCompleted": "Completed",
@@ -130,7 +145,7 @@
     "move": "Move",
     "outdent": "Outdent (Shift+Tab)",
     "indent": "Indent (Tab)",
-    "markUrgent": "Mark as urgent",
+    "markImportant": "Mark as important",
     "cardLimit": "Card limit ({{max}})"
   },
   "chaosTab": {
@@ -150,7 +165,8 @@
     "noKeyError": "Configure your Gemini key in Settings",
     "emptyContextError": "The Chaos source tabs are empty",
     "generated": "Digest generated",
-    "generateError": "Error during generation. Check your Gemini key."
+    "generateError": "Error during generation. Check your Gemini key.",
+    "notModified": "No Chaos changes since last generation"
   },
   "widgetsTab": {
     "header": "Widgets ({{count}})",
@@ -174,6 +190,7 @@
     "regenerateAllSuccess": "All widgets have been regenerated",
     "widgetError": "Error for widget \"{{title}}\"",
     "noKeyError": "Configure your Gemini key in Settings",
+    "notModified": "No changes since last generation",
     "presets": {
       "topTodos": "5 priority todos",
       "topTodosPrompt": "Based on this project's content, list the 5 most priority tasks to accomplish.",
@@ -214,7 +231,8 @@
       "close": "✕",
       "createTag": "+ Create a tag",
       "deleteTitle": "Delete tag \"{{name}}\"?",
-      "deleteDescription": "The tag will be removed from all associated projects."
+      "deleteDescription": "The tag will be removed from all associated projects.",
+      "empty": "No tags yet. Create one below."
     }
   },
   "toasts": {

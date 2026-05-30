@@ -6,10 +6,20 @@ import { toast } from '@/store/useAppStore'
 import type { ProjectRow, ProjectWithRelations } from '@/types'
 
 function normalizeProject(row: ProjectRow): ProjectWithRelations {
+  const descTab = row.tabs?.find((t) => t.type === 'description')
+  const maxOnCard = (descTab?.config as { max_on_card?: number } | undefined)?.max_on_card ?? 5
+  const urgentTodos = (descTab?.todos ?? [])
+    .filter((t) => t.urgent && !t.completed)
+    .sort((a, b) => a.position - b.position)
+    .slice(0, maxOnCard)
+    .map((t) => ({ id: t.id, content: t.content, completed: t.completed }))
+    .filter((t) => Boolean(t.content))
+
   return {
     ...row,
     tags: row.project_tags?.map((pt) => pt.tags).filter(Boolean) ?? [],
     project_links: row.project_links ?? [],
+    urgent_todos: urgentTodos,
   }
 }
 
@@ -23,7 +33,7 @@ export function useProjects() {
     if (!user) return
     const { data, error } = await supabase
       .from('projects')
-      .select('*, project_tags(tags(*)), project_links(*)')
+      .select('*, project_tags(tags(*)), project_links(*), tabs(id, type, config, todos(id, content, urgent, completed, position))')
       .eq('user_id', user.id)
       .eq('archived', false)
       .order('updated_at', { ascending: false })

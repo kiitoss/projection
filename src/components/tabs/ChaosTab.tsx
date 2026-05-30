@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
 import { formatRelativeDate } from '@/lib/utils'
+import { toast } from '@/store/useAppStore'
 import type { Tab } from '@/types'
 
 interface ChaosTabProps {
@@ -16,16 +17,17 @@ export function ChaosTab({ tab }: ChaosTabProps) {
   const { t } = useTranslation()
 
   const fetchContent = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('chaos_content')
       .select('*')
       .eq('tab_id', tab.id)
-      .single()
+      .maybeSingle()
+    if (error) toast.error(t('toasts.saveError'))
     if (data) {
       setContent(data.content)
       setUpdatedAt(data.updated_at)
     }
-  }, [tab.id])
+  }, [tab.id, t])
 
   useEffect(() => { fetchContent() }, [fetchContent])
 
@@ -34,12 +36,13 @@ export function ChaosTab({ tab }: ChaosTabProps) {
     setSaving(true)
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('chaos_content')
         .update({ content: value })
         .eq('tab_id', tab.id)
         .select('updated_at')
-        .single()
+        .maybeSingle()
+      if (error) toast.error(t('toasts.saveError'))
       if (data) setUpdatedAt(data.updated_at)
       setSaving(false)
     }, 1000)

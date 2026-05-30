@@ -31,9 +31,11 @@ export const useAppStore = create<AppState>((set) => ({
   selectedTagIds: [],
   toggleTagFilter: (id) =>
     set((s) => ({
-      selectedTagIds: s.selectedTagIds.includes(id)
-        ? s.selectedTagIds.filter((t) => t !== id)
-        : [...s.selectedTagIds, id],
+      // Single-select: click a new tag → select only that tag; click same tag → deselect
+      selectedTagIds:
+        s.selectedTagIds.length === 1 && s.selectedTagIds[0] === id
+          ? []
+          : [id],
     })),
   clearTagFilters: () => set({ selectedTagIds: [] }),
 
