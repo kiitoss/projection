@@ -41,7 +41,10 @@
     "emptyCreate": "Start by creating your first project",
     "createProject": "Create a project",
     "noResults": "No project matches this filter",
-    "resetFilters": "Reset filters"
+    "resetFilters": "Reset filters",
+    "toggleTodos": "Tasks",
+    "importantTodos": "Important tasks",
+    "noImportantTodos": "No important tasks"
   },
   "projectCard": {
     "todos": "Todo",
@@ -87,8 +90,10 @@
   "addTab": {
     "title": "Add tab",
     "tabTitle": "Tab title",
-    "chaosSources": "Chaos sources",
+    "sources": "Sources",
+    "chaosSources": "Chaos tabs",
     "selectOneChaos": "Select at least one Chaos tab",
+    "selectOneSource": "Select at least one source",
     "todoExists": "A Todo tab already exists",
     "widgetsExists": "A Widgets tab already exists",
     "noChaos": "Create a Chaos tab first",
@@ -104,7 +109,7 @@
       },
       "digest": {
         "label": "Digest",
-        "description": "AI summary from Chaos notes"
+        "description": "AI summary from your project data"
       },
       "widgets": {
         "label": "Widgets",
@@ -113,7 +118,7 @@
     }
   },
   "descriptionTab": {
-    "defaultTitle": "Description",
+    "defaultTitle": "Infos",
     "shortDesc": "Short description",
     "showOnCard": "Show on card",
     "shortDescPlaceholder": "A short summary of your project...",
@@ -125,7 +130,7 @@
     "addPoint": "Add a point",
     "keyPointPlaceholder": "Key point...",
     "reorder": "Reorder",
-    "urgences": "Urgent",
+    "urgences": "Important",
     "links": "Links",
     "urlPlaceholder": "https://...",
     "labelPlaceholder": "Label (optional)",
@@ -133,7 +138,7 @@
   },
   "todoTab": {
     "show": "Show",
-    "importantOnCard": "important tasks on card",
+    "importantOnCard": "on card",
     "filterAll": "All",
     "filterActive": "Active",
     "filterCompleted": "Completed",
@@ -155,18 +160,20 @@
   },
   "digestTab": {
     "sources": "Sources:",
+    "sourceDescription": "Description",
+    "sourceTodos": "Todo",
     "prompt": "Prompt",
     "lastGenerated": "Last generated: {{date}}",
     "generate": "Generate",
     "generating": "Generating...",
     "generatingMessage": "Generating...",
-    "emptyState": "Click \"Generate\" to create a digest from your Chaos notes.",
-    "defaultPrompt": "Clearly and concisely summarize the key information in these notes. Identify important actions, decisions made, and points of attention. Use lists and headings to structure the response.",
+    "emptyState": "Click \"Generate\" to create a digest.",
+    "defaultPrompt": "Clearly and concisely summarize the key information in this data. Identify important actions, decisions made, and points of attention. Use lists and headings to structure the response.",
     "noKeyError": "Configure your Gemini key in Settings",
-    "emptyContextError": "The Chaos source tabs are empty",
+    "emptyContextError": "The selected sources contain no content",
     "generated": "Digest generated",
     "generateError": "Error during generation. Check your Gemini key.",
-    "notModified": "No Chaos changes since last generation"
+    "notModified": "No source changes since last generation"
   },
   "widgetsTab": {
     "header": "Widgets ({{count}})",
@@ -233,7 +240,21 @@
       "deleteTitle": "Delete tag \"{{name}}\"?",
       "deleteDescription": "The tag will be removed from all associated projects.",
       "empty": "No tags yet. Create one below."
+    },
+    "inviteCode": {
+      "title": "Invite Code",
+      "description": "Generate a 6-digit code valid for 30 seconds to share with the person you want to invite.",
+      "generate": "Generate a code",
+      "expiresIn": "Expires in {{seconds}}s",
+      "error": "Error generating code"
     }
+  },
+  "invite": {
+    "subtitle": "Enter the code shown in your authenticator app to access Projection.",
+    "placeholder": "000000",
+    "submit": "Access",
+    "invalidCode": "Invalid code. Please try again.",
+    "signOut": "Sign in with a different account"
   },
   "toasts": {
     "projectsLoadError": "Error loading projects",
@@ -265,6 +286,6 @@
     "keyPoints": "Key points:",
     "notes": "Notes ({{title}}):",
     "activeTodos": "Active tasks:",
-    "urgent": "URGENT"
+    "urgent": "IMPORTANT"
   }
 }

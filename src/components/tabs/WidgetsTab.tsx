@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
   closestCenter,
@@ -32,21 +33,33 @@ interface WidgetsTabProps {
 }
 
 export function WidgetsTab({ tab, project }: WidgetsTabProps) {
-  const [widgets, setWidgets] = useState<Widget[]>([])
   const [addOpen, setAddOpen] = useState(false)
   const [confirmRegenAll, setConfirmRegenAll] = useState(false)
   const [chaosMaxUpdatedAt, setChaosMaxUpdatedAt] = useState<Date | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const { t } = useTranslation()
+  const qc = useQueryClient()
+  const queryKey = ['widgets', tab.id] as const
 
-  const fetchWidgets = useCallback(async () => {
-    const { data } = await supabase
-      .from('widgets')
-      .select('*')
-      .eq('tab_id', tab.id)
-      .order('position')
-    setWidgets((data as Widget[]) ?? [])
-  }, [tab.id])
+  const { data: widgets = [] } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('widgets')
+        .select('*')
+        .eq('tab_id', tab.id)
+        .order('position')
+      return (data as Widget[]) ?? []
+    },
+  })
+
+  const invalidate = () => qc.invalidateQueries({ queryKey })
+
+  function setWidgetsData(value: Widget[] | ((prev: Widget[]) => Widget[])) {
+    qc.setQueryData<Widget[]>(queryKey, (old = []) =>
+      typeof value === 'function' ? value(old) : value
+    )
+  }
 
   const fetchChaosInfo = useCallback(async () => {
     const { data: chaosTabs } = await supabase
@@ -71,7 +84,6 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
     }
   }, [project.id])
 
-  useEffect(() => { fetchWidgets() }, [fetchWidgets])
   useEffect(() => { fetchChaosInfo() }, [fetchChaosInfo])
 
   function isWidgetStale(widget: Widget): boolean {
@@ -107,7 +119,7 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
         'tab_id',
         (
           await supabase.from('tabs').select('id').eq('project_id', project.id).eq('type', 'todo')
-        ).data?.map((tab: { id: string }) => tab.id) ?? [],
+        ).data?.map((t: { id: string }) => t.id) ?? [],
       )
 
     return buildProjectContext({
@@ -138,10 +150,8 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
       .update({ content, last_generated_at: now })
       .eq('id', widget.id)
     if (!error) {
-      setWidgets((prev) =>
-        prev.map((w) =>
-          w.id === widget.id ? { ...w, content, last_generated_at: now } : w,
-        ),
+      setWidgetsData((prev) =>
+        prev.map((w) => w.id === widget.id ? { ...w, content, last_generated_at: now } : w)
       )
     }
   }
@@ -167,28 +177,55 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
         toast.error(t('widgetsTab.widgetError', { title: widget.title }))
       }
     }
-    await fetchWidgets()
+    await invalidate()
     toast.success(t('widgetsTab.regenerateAllSuccess'))
     setConfirmRegenAll(false)
   }
 
-  async function addWidget(title: string, prompt: string) {
-    const position = widgets.length
-    const { error } = await supabase
-      .from('widgets')
-      .insert({ tab_id: tab.id, title, prompt, position })
-    if (!error) await fetchWidgets()
-  }
+  const addWidgetMutation = useMutation({
+    mutationFn: async ({ title, prompt }: { title: string; prompt: string }) => {
+      const position = widgets.length
+      const { error } = await supabase
+        .from('widgets')
+        .insert({ tab_id: tab.id, title, prompt, position })
+      if (error) throw error
+    },
+    onSettled: () => invalidate(),
+  })
 
-  async function updateWidget(id: string, updates: Partial<Widget>) {
-    await supabase.from('widgets').update(updates).eq('id', id)
-    setWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, ...updates } : w)))
-  }
+  const updateWidgetMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Widget> }) => {
+      const { error } = await supabase.from('widgets').update(updates).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async ({ id, updates }) => {
+      await qc.cancelQueries({ queryKey })
+      const snapshot = qc.getQueryData<Widget[]>(queryKey)
+      setWidgetsData((prev) => prev.map((w) => (w.id === id ? { ...w, ...updates } : w)))
+      return { snapshot }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshot) qc.setQueryData(queryKey, ctx.snapshot)
+    },
+    onSettled: () => invalidate(),
+  })
 
-  async function deleteWidget(id: string) {
-    await supabase.from('widgets').delete().eq('id', id)
-    setWidgets((prev) => prev.filter((w) => w.id !== id))
-  }
+  const deleteWidgetMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('widgets').delete().eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey })
+      const snapshot = qc.getQueryData<Widget[]>(queryKey)
+      setWidgetsData((prev) => prev.filter((w) => w.id !== id))
+      return { snapshot }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshot) qc.setQueryData(queryKey, ctx.snapshot)
+    },
+    onSettled: () => invalidate(),
+  })
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -196,12 +233,12 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
     const oldIndex = widgets.findIndex((w) => w.id === active.id)
     const newIndex = widgets.findIndex((w) => w.id === over.id)
     const newOrder = arrayMove(widgets, oldIndex, newIndex)
-    setWidgets(newOrder)
+    setWidgetsData(newOrder)
     newOrder.forEach((w, i) => supabase.from('widgets').update({ position: i }).eq('id', w.id))
   }
 
   return (
-    <div className="flex flex-col gap-4 p-6 max-w-2xl">
+    <div className="flex flex-col gap-4 p-6">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200">
           {t('widgetsTab.header', { count: widgets.length })}
@@ -235,8 +272,8 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
                 widget={widget}
                 isStale={isWidgetStale(widget)}
                 onRegenerate={() => generateWidget(widget)}
-                onUpdate={(updates) => updateWidget(widget.id, updates)}
-                onDelete={() => deleteWidget(widget.id)}
+                onUpdate={(updates) => updateWidgetMutation.mutateAsync({ id: widget.id, updates })}
+                onDelete={() => deleteWidgetMutation.mutateAsync(widget.id)}
               />
             ))}
           </div>
@@ -258,7 +295,7 @@ export function WidgetsTab({ tab, project }: WidgetsTabProps) {
       <AddWidgetModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onAdd={addWidget}
+        onAdd={(title, prompt) => addWidgetMutation.mutateAsync({ title, prompt })}
       />
 
       <ConfirmDialog

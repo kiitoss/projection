@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -11,7 +11,7 @@ import { toast } from '@/store/useAppStore'
 import type { UserSettings } from '@/types'
 
 export function SettingsPage() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [settings, setSettings] = useState<UserSettings | null>(null)
@@ -20,12 +20,18 @@ export function SettingsPage() {
   const [testingKey, setTestingKey] = useState(false)
   const [keyValid, setKeyValid] = useState<boolean | null>(null)
 
+  // Invite code (admin only)
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState(0)
+  const [generatingCode, setGeneratingCode] = useState(false)
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const fetchSettings = useCallback(async () => {
     if (!user) return
 
     let { data: settingsData } = await supabase
       .from('user_settings')
-      .select('user_id, theme')
+      .select('user_id, theme, role, invited_by')
       .eq('user_id', user.id)
       .maybeSingle()
 
@@ -33,7 +39,7 @@ export function SettingsPage() {
       const { data: created } = await supabase
         .from('user_settings')
         .insert({ user_id: user.id })
-        .select('user_id, theme')
+        .select('user_id, theme, role, invited_by')
         .single()
       settingsData = created
     }
@@ -46,6 +52,42 @@ export function SettingsPage() {
   }, [user])
 
   useEffect(() => { fetchSettings() }, [fetchSettings])
+
+  function startCountdown(expiresAt: string) {
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    countdownRef.current = setInterval(() => {
+      const remaining = Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000))
+      setCountdown(remaining)
+      if (remaining === 0) {
+        setInviteCode(null)
+        if (countdownRef.current) clearInterval(countdownRef.current)
+      }
+    }, 1000)
+  }
+
+  useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current) }, [])
+
+  async function generateCode() {
+    if (!user) return
+    setGeneratingCode(true)
+
+    // Supprimer les codes existants non utilisés de cet admin
+    await supabase.from('invite_codes').delete().eq('created_by', user.id).is('used_by', null)
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString()
+    const expiresAt = new Date(Date.now() + 30000).toISOString()
+
+    const { error } = await supabase.from('invite_codes').insert({ code, created_by: user.id, expires_at: expiresAt })
+    setGeneratingCode(false)
+
+    if (error) {
+      toast.error(t('settings.inviteCode.error'))
+      return
+    }
+
+    setInviteCode(code)
+    startCountdown(expiresAt)
+  }
 
   async function saveApiKey() {
     if (!user) return
@@ -116,13 +158,7 @@ export function SettingsPage() {
                 {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={handleTestKey}
-              loading={testingKey}
-              disabled={!apiKey}
-            >
+            <Button variant="secondary" size="md" onClick={handleTestKey} loading={testingKey} disabled={!apiKey}>
               {t('settings.gemini.test')}
             </Button>
           </div>
@@ -139,12 +175,7 @@ export function SettingsPage() {
           )}
           <p className="text-xs text-slate-400">
             {t('settings.gemini.info')}{' '}
-            <a
-              href="https://aistudio.google.com/app/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-indigo-500 hover:underline"
-            >
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">
               {t('settings.gemini.studioLink')}
             </a>
             .
@@ -168,6 +199,28 @@ export function SettingsPage() {
             ))}
           </div>
         </Section>
+
+        {role === 'admin' && (
+          <Section title={t('settings.inviteCode.title')}>
+            {inviteCode ? (
+              <div className="flex flex-col items-center gap-3 py-2">
+                <div className="text-5xl font-mono font-bold tracking-widest text-indigo-600 dark:text-indigo-400 select-all">
+                  {inviteCode}
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {t('settings.inviteCode.expiresIn', { seconds: countdown })}
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{t('settings.inviteCode.description')}</p>
+                <Button variant="secondary" onClick={generateCode} loading={generatingCode}>
+                  {t('settings.inviteCode.generate')}
+                </Button>
+              </>
+            )}
+          </Section>
+        )}
       </div>
     </div>
   )

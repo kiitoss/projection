@@ -1,4 +1,4 @@
-export type TabType = 'description' | 'chaos' | 'digest' | 'widgets'
+export type TabType = 'infos' | 'chaos' | 'digest' | 'widgets'
 
 export interface Tag {
   id: string
@@ -32,6 +32,8 @@ export interface TodoListConfig {
 export interface DigestTabConfig {
   prompt: string
   chaos_tab_ids: string[]
+  include_description?: boolean
+  include_todos?: boolean
 }
 
 export interface Project {
@@ -66,7 +68,7 @@ interface ProjectTabRow {
   id: string
   type: string
   config: Record<string, unknown>
-  todos: Pick<Todo, 'id' | 'content' | 'urgent' | 'completed' | 'position'>[]
+  todos: Pick<Todo, 'id' | 'content' | 'urgent' | 'completed' | 'position' | 'parent_id' | 'level'>[]
 }
 
 // Shape returned by Supabase with nested joins
@@ -118,6 +120,9 @@ export interface UserSettings {
   user_id: string
   gemini_api_key: string | null
   theme: 'light' | 'dark' | 'system'
+  authorized: boolean
+  role: 'user' | 'admin'
+  invited_by: string | null
 }
 
 export type ToastType = 'success' | 'error' | 'info'

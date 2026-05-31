@@ -1,12 +1,20 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { queryClient } from '@/lib/queryClient'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Layout } from '@/components/layout/Layout'
 import { LoginPage } from '@/pages/LoginPage'
+import { InvitePage } from '@/pages/InvitePage'
 import { HomePage } from '@/pages/HomePage'
 import { ProjectPage } from '@/pages/ProjectPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+
+if (import.meta.env.DEV) {
+  document.title = 'Projection - DEV'
+}
 
 function applyTheme(theme: string) {
   const isDark =
@@ -33,25 +41,29 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function App() {
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <BrowserRouter basename={import.meta.env.BASE_URL}>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<HomePage />} />
-              <Route path="projects/:id" element={<ProjectPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </ThemeProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <ThemeProvider>
+          <BrowserRouter basename={import.meta.env.BASE_URL}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/invite" element={<InvitePage />} />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<HomePage />} />
+                <Route path="projects/:id" element={<ProjectPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </ThemeProvider>
+      </AuthProvider>
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
   )
 }

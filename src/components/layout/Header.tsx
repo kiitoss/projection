@@ -79,7 +79,7 @@ export function Header({ onNewProject, onRegenerateAll, regenerateLoading }: Hea
       <div ref={menuRef} className="relative">
         <button
           onClick={() => setMenuOpen((o) => !o)}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
           aria-label={t('header.userMenu')}
         >
           {initials}
@@ -91,18 +91,19 @@ export function Header({ onNewProject, onRegenerateAll, regenerateLoading }: Hea
             <hr className="my-1 border-slate-100 dark:border-slate-700" />
             <button
               onClick={() => { navigate('/settings'); setMenuOpen(false) }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               <Settings size={14} />
               {t('header.settings')}
             </button>
             <button
               onClick={() => { signOut(); setMenuOpen(false) }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               <LogOut size={14} />
               {t('header.signOut')}
             </button>
+            <p className="px-3 py-1.5 text-[10px] text-slate-300 dark:text-slate-600">{__APP_VERSION__}</p>
           </div>
         )}
       </div>

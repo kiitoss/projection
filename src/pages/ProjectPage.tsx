@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ChevronLeft, Plus, X } from 'lucide-react'
+import { ChevronLeft, ChevronDown, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Header } from '@/components/layout/Header'
 import { TabBar } from '@/components/tabs/TabBar'
@@ -24,7 +24,13 @@ import { cn } from '@/lib/utils'
 import type { TabType, Widget, DigestTabConfig } from '@/types'
 
 interface RegenAllItems {
-  digestTabs: Array<{ tabId: string; chaosTabIds: string[]; prompt: string }>
+  digestTabs: Array<{
+    tabId: string
+    chaosTabIds: string[]
+    prompt: string
+    include_description: boolean
+    include_todos: boolean
+  }>
   widgets: Widget[]
 }
 
@@ -39,6 +45,9 @@ export function ProjectPage() {
   const { t } = useTranslation()
 
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  const [descOpen, setDescOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('projection:desc-open') !== 'false' } catch { return true }
+  })
   const [addTabOpen, setAddTabOpen] = useState(false)
   const [confirmDeleteTab, setConfirmDeleteTab] = useState<string | null>(null)
   const [tagPickerOpen, setTagPickerOpen] = useState(false)
@@ -119,14 +128,10 @@ export function ProjectPage() {
     for (const digestTab of digestTabs) {
       const config = digestTab.config as unknown as DigestTabConfig
       const chaosTabIds: string[] = config?.chaos_tab_ids ?? []
-      if (!chaosTabIds.length) continue
+      const include_description = config?.include_description ?? false
+      const include_todos = config?.include_todos ?? false
 
-      const relevantChaos = chaosContentsMap.filter((c) => chaosTabIds.includes(c.tab_id))
-      if (!relevantChaos.length) continue
-
-      const maxRelevantChaos = new Date(
-        Math.max(...relevantChaos.map((r) => new Date(r.updated_at).getTime())),
-      )
+      if (!chaosTabIds.length && !include_description && !include_todos) continue
 
       const { data: latestGen } = await supabase
         .from('digest_generated')
@@ -136,12 +141,35 @@ export function ProjectPage() {
         .limit(1)
         .maybeSingle()
 
-      const isStale = !latestGen || maxRelevantChaos > new Date(latestGen.generated_at)
+      let isStale = !latestGen
+
+      if (!isStale && latestGen) {
+        const genTime = new Date(latestGen.generated_at).getTime()
+
+        if (include_description && new Date(project!.updated_at).getTime() > genTime) {
+          isStale = true
+        }
+
+        if (!isStale && include_todos) {
+          isStale = true
+        }
+
+        if (!isStale && chaosTabIds.length > 0) {
+          const relevantChaos = chaosContentsMap.filter((c) => chaosTabIds.includes(c.tab_id))
+          if (relevantChaos.length) {
+            const maxRelevantChaos = Math.max(...relevantChaos.map((r) => new Date(r.updated_at).getTime()))
+            if (maxRelevantChaos > genTime) isStale = true
+          }
+        }
+      }
+
       if (isStale) {
         staleDigestTabs.push({
           tabId: digestTab.id,
           chaosTabIds,
           prompt: (config?.prompt as string) ?? t('digestTab.defaultPrompt'),
+          include_description,
+          include_todos,
         })
       }
     }
@@ -190,20 +218,61 @@ export function ProjectPage() {
     let current = 0
 
     // Regenerate stale digests
-    for (const { tabId, chaosTabIds, prompt } of regenAllItems.digestTabs) {
+    for (const { tabId, chaosTabIds, prompt, include_description, include_todos } of regenAllItems.digestTabs) {
       try {
-        const [{ data: chaosRows }, { data: chaosTabs }] = await Promise.all([
-          supabase.from('chaos_content').select('content, tab_id').in('tab_id', chaosTabIds),
-          supabase.from('tabs').select('id, title').in('id', chaosTabIds),
-        ])
+        const contextParts: string[] = []
 
-        const context = ((chaosRows as { content: string; tab_id: string }[]) ?? [])
-          .map((row) => {
+        if (include_description && project) {
+          if (project.long_description) {
+            contextParts.push(`## ${t('geminiContext.description')}\n\n${project.long_description}`)
+          }
+          if (project.key_points.length > 0) {
+            contextParts.push(
+              `## ${t('geminiContext.keyPoints')}\n\n${project.key_points.map((p) => `• ${p}`).join('\n')}`,
+            )
+          }
+        }
+
+        if (include_todos && project) {
+          const { data: infoTab } = await supabase
+            .from('tabs')
+            .select('id')
+            .eq('project_id', project.id)
+            .eq('type', 'infos')
+            .limit(1)
+            .maybeSingle()
+          if (infoTab) {
+            const { data: todosData } = await supabase
+              .from('todos')
+              .select('content, completed, urgent')
+              .eq('tab_id', (infoTab as { id: string }).id)
+              .order('position')
+            const activeTodos = (
+              (todosData as { content: string; completed: boolean; urgent: boolean }[]) ?? []
+            ).filter((todo) => !todo.completed)
+            if (activeTodos.length > 0) {
+              contextParts.push(
+                `## ${t('geminiContext.activeTodos')}\n\n${activeTodos.map((todo) => `${todo.urgent ? `[${t('geminiContext.urgent')}] ` : ''}• ${todo.content}`).join('\n')}`,
+              )
+            }
+          }
+        }
+
+        if (chaosTabIds.length > 0) {
+          const [{ data: chaosRows }, { data: chaosTabs }] = await Promise.all([
+            supabase.from('chaos_content').select('content, tab_id').in('tab_id', chaosTabIds),
+            supabase.from('tabs').select('id, title').in('id', chaosTabIds),
+          ])
+          for (const row of (chaosRows as { content: string; tab_id: string }[]) ?? []) {
             const tabName =
               (chaosTabs as { id: string; title: string }[])?.find((ct) => ct.id === row.tab_id)?.title ?? 'Chaos'
-            return `## ${tabName}\n\n${row.content}`
-          })
-          .join('\n\n---\n\n')
+            if (row.content.trim()) {
+              contextParts.push(`## ${tabName}\n\n${row.content}`)
+            }
+          }
+        }
+
+        const context = contextParts.join('\n\n---\n\n')
 
         if (!context.trim()) { current++; setRegenProgress({ current, total }); continue }
 
@@ -363,20 +432,36 @@ export function ProjectPage() {
 
       <div className={cn(
         'flex-1 bg-slate-50 dark:bg-slate-900',
-        activeTab?.type === 'description'
+        activeTab?.type === 'infos'
           ? 'overflow-y-auto md:overflow-hidden flex flex-col md:flex-row'
           : 'overflow-y-auto',
       )}>
-        {activeTab?.type === 'description' && (
+        {activeTab?.type === 'infos' && (
           <>
-            <div className="md:flex-1 md:overflow-y-auto border-b border-slate-200 dark:border-slate-700 md:border-b-0 md:border-r">
-              <DescriptionTab
-                project={project}
-                onUpdate={updateProject}
-                onAddLink={addLink}
-                onDeleteLink={deleteLink}
-                className="w-full"
-              />
+            <div className="md:flex-1 md:overflow-y-auto md:border-r border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => {
+                  const next = !descOpen
+                  setDescOpen(next)
+                  try { localStorage.setItem('projection:desc-open', String(next)) } catch {}
+                }}
+                className="md:hidden flex w-full items-center justify-between px-6 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 cursor-pointer"
+              >
+                <span>{t('descriptionTab.defaultTitle')}</span>
+                <ChevronDown
+                  size={16}
+                  className={cn('transition-transform duration-200', !descOpen && '-rotate-90')}
+                />
+              </button>
+              <div className={cn(descOpen ? 'block' : 'hidden md:block')}>
+                <DescriptionTab
+                  project={project}
+                  onUpdate={updateProject}
+                  onAddLink={addLink}
+                  onDeleteLink={deleteLink}
+                  className="w-full"
+                />
+              </div>
             </div>
             <div className="md:flex-1 md:overflow-y-auto">
               <TodoList
@@ -390,10 +475,11 @@ export function ProjectPage() {
         {activeTab?.type === 'chaos' && (
           <ChaosTab tab={activeTab} />
         )}
-        {activeTab?.type === 'digest' && (
+        {activeTab?.type === 'digest' && project && (
           <DigestTab
             tab={activeTab}
             onUpdateTab={(updates) => updateTab(activeTab.id, updates)}
+            project={project}
           />
         )}
         {activeTab?.type === 'widgets' && project && (

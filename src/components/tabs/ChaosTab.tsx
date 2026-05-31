@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
 import { formatRelativeDate } from '@/lib/utils'
@@ -16,20 +17,25 @@ export function ChaosTab({ tab }: ChaosTabProps) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { t } = useTranslation()
 
-  const fetchContent = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('chaos_content')
-      .select('*')
-      .eq('tab_id', tab.id)
-      .maybeSingle()
-    if (error) toast.error(t('toasts.saveError'))
-    if (data) {
-      setContent(data.content)
-      setUpdatedAt(data.updated_at)
-    }
-  }, [tab.id, t])
+  const { data: chaosData } = useQuery({
+    queryKey: ['chaos', tab.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('chaos_content')
+        .select('*')
+        .eq('tab_id', tab.id)
+        .maybeSingle()
+      if (error) toast.error(t('toasts.saveError'))
+      return data
+    },
+  })
 
-  useEffect(() => { fetchContent() }, [fetchContent])
+  useEffect(() => {
+    if (chaosData) {
+      setContent(chaosData.content)
+      setUpdatedAt(chaosData.updated_at)
+    }
+  }, [chaosData])
 
   function handleChange(value: string) {
     setContent(value)

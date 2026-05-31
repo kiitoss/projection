@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Plus, MoreVertical, GripHorizontal } from 'lucide-react'
+import { Plus, MoreVertical } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   DndContext,
@@ -43,8 +43,7 @@ interface SortableTabProps {
 function SortableTab({ tab, isActive, isRenaming, onSelect, onRename, onDoneRenaming, onMenuOpen, menuOpen }: SortableTabProps) {
   const [editTitle, setEditTitle] = useState(tab.title)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
-  const isDescription = tab.type === 'description'
-  const { t } = useTranslation()
+  const isDescription = tab.type === 'infos'
 
   useEffect(() => {
     if (isRenaming) setEditTitle(tab.title)
@@ -77,25 +76,16 @@ function SortableTab({ tab, isActive, isRenaming, onSelect, onRename, onDoneRena
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        'group relative flex shrink-0 items-center gap-1 border-b-2 px-3 py-2.5 text-sm transition-colors cursor-pointer select-none',
+        'group relative flex shrink-0 items-center gap-1 border-b-2 px-3 py-2.5 text-sm transition-colors select-none',
+        !isDescription ? 'cursor-grab' : 'cursor-pointer',
         isDragging ? 'z-10 opacity-75' : '',
         isActive
           ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 font-medium'
           : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
       )}
+      {...(!isDescription ? { ...attributes, ...listeners } : {})}
       onClick={onSelect}
     >
-      {!isDescription && (
-        <span
-          {...attributes}
-          {...listeners}
-          className="cursor-grab text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          onClick={(e) => e.stopPropagation()}
-          title={t('tabBar.drag')}
-        >
-          <GripHorizontal size={13} />
-        </span>
-      )}
 
       {isRenaming ? (
         <form onSubmit={handleRename} onClick={(e) => e.stopPropagation()}>

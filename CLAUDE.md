@@ -195,6 +195,65 @@ buildProjectContext({ projectName, longDescription, keyPoints, chaosContents, to
 
 `@dnd-kit/core` + `@dnd-kit/sortable`. `PointerSensor` avec `distance: 5` pour éviter les clics accidentels.
 
+### TanStack Query (React Query v5)
+
+Cache serveur via `@tanstack/react-query`. Ne pas confondre avec l'état UI géré par Zustand.
+
+`QueryClientProvider` dans `App.tsx` (en dehors de `AuthProvider`), config dans `src/lib/queryClient.ts` : `staleTime: 30_000`, `refetchOnWindowFocus: false` (Realtime gère la fraîcheur).
+
+**Convention de query keys** :
+```ts
+['projects', userId]   // useProjects — liste des projets
+['project', projectId] // useProject — projet + onglets
+['tags', userId]       // useTags — liste des tags
+['todos', tabId]       // TodoList — todos d'un onglet
+['widgets', tabId]     // WidgetsTab — widgets d'un onglet
+['chaos', tabId]       // ChaosTab — fetch initial uniquement
+```
+
+**OBLIGATOIRE** — les mutations Supabase doivent `throw` sur erreur (Supabase renvoie `{ error }`, ne rejette PAS la Promise) :
+```ts
+const { error } = await supabase.from('...').update(...)
+if (error) throw error  // sans ça, onError ne se déclenche pas
+```
+
+**Pattern optimistic update** (toutes les mutations instantanées) :
+```ts
+useMutation({
+  mutationFn: async (vars) => { /* supabase call; if (error) throw error */ },
+  onMutate: async (vars) => {
+    await qc.cancelQueries({ queryKey })
+    const snapshot = qc.getQueryData(queryKey)
+    qc.setQueryData(queryKey, (old) => /* apply change */ old)
+    return { snapshot }
+  },
+  onError: (_err, _vars, ctx) => {
+    qc.setQueryData(queryKey, ctx!.snapshot)
+    toast.error(t('toasts.saveError'))
+  },
+  onSettled: () => qc.invalidateQueries({ queryKey }),
+})
+```
+
+**Realtime → QueryClient bridge** (dans le hook propriétaire de la query key) :
+```ts
+useEffect(() => {
+  const channel = supabase
+    .channel('channel-name')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tableName' }, () => {
+      qc.invalidateQueries({ queryKey: ['resource', scopeId] })
+    })
+    .subscribe()
+  return () => { supabase.removeChannel(channel) }
+}, [scopeId, qc])
+```
+Toujours `invalidateQueries` dans les bridges — jamais `setQueryData` (évite de parser les payloads Realtime).
+
+**Ne pas migrer vers `useMutation`** :
+- `handleChange` dans `ChaosTab.tsx` — debounce 1000ms, write direct Supabase
+- `saveTimer` dans `SortableTodoItem` (TodoList) — debounce 500ms sur le contenu
+- `saveTimer` dans `DescriptionTab.tsx` — debounce 1000ms descriptions
+
 ## Base de données Supabase
 
 Schéma complet dans `supabase/migrations/001_initial_schema.sql`.

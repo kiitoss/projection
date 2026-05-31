@@ -7,17 +7,20 @@ import { formatDate } from '@/lib/utils'
 import { Spinner } from '@/components/ui/Spinner'
 import { Button } from '@/components/ui/Button'
 import { toast } from '@/store/useAppStore'
-import type { DigestGenerated, DigestTabConfig, Tab } from '@/types'
+import type { DigestGenerated, DigestTabConfig, Tab, ProjectWithRelations } from '@/types'
 
 interface DigestTabProps {
   tab: Tab
   onUpdateTab: (updates: Partial<Tab>) => Promise<void>
+  project: ProjectWithRelations
 }
 
-export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
+export function DigestTab({ tab, onUpdateTab, project }: DigestTabProps) {
   const { t } = useTranslation()
   const config = tab.config as unknown as DigestTabConfig
   const chaosTabIds: string[] = config?.chaos_tab_ids ?? []
+  const includeDescription = config?.include_description ?? false
+  const includeTodos = config?.include_todos ?? false
   const defaultPrompt = t('digestTab.defaultPrompt')
   const prompt = config?.prompt ?? defaultPrompt
 
@@ -26,7 +29,7 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
   const [promptOpen, setPromptOpen] = useState(false)
   const [editPrompt, setEditPrompt] = useState(prompt)
   const [chaosTabs, setChaosTabs] = useState<{ id: string; title: string }[]>([])
-  const [chaosModified, setChaosModified] = useState(true)
+  const [sourceModified, setSourceModified] = useState(true)
 
   const fetchData = useCallback(async () => {
     const { data: gen } = await supabase
@@ -40,46 +43,121 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
     setPromptOpen(!gen)
 
     if (chaosTabIds.length > 0) {
-      const [tabsResult, chaosResult] = await Promise.all([
-        supabase.from('tabs').select('id, title').in('id', chaosTabIds),
-        supabase.from('chaos_content').select('tab_id, updated_at').in('tab_id', chaosTabIds),
-      ])
-      setChaosTabs((tabsResult.data as { id: string; title: string }[]) ?? [])
+      const { data: tabsData } = await supabase.from('tabs').select('id, title').in('id', chaosTabIds)
+      setChaosTabs((tabsData as { id: string; title: string }[]) ?? [])
+    }
 
-      if (!gen) {
-        setChaosModified(true)
-      } else if (chaosResult.data?.length) {
-        const maxChaos = Math.max(
-          ...(chaosResult.data as { updated_at: string }[]).map((r) => new Date(r.updated_at).getTime()),
-        )
-        setChaosModified(maxChaos > new Date(gen.generated_at).getTime())
-      } else {
-        setChaosModified(false)
+    if (!gen) {
+      setSourceModified(true)
+      return
+    }
+
+    const genTime = new Date(gen.generated_at).getTime()
+    let modified = false
+
+    if (includeDescription && !modified) {
+      if (new Date(project.updated_at).getTime() > genTime) modified = true
+    }
+
+    if (includeTodos && !modified) {
+      const { data: infoTab } = await supabase
+        .from('tabs')
+        .select('id')
+        .eq('project_id', project.id)
+        .eq('type', 'infos')
+        .limit(1)
+        .maybeSingle()
+      if (infoTab) {
+        const { data: latestTodo } = await supabase
+          .from('todos')
+          .select('created_at')
+          .eq('tab_id', (infoTab as { id: string }).id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (latestTodo && new Date((latestTodo as { created_at: string }).created_at).getTime() > genTime) {
+          modified = true
+        }
       }
     }
-  }, [tab.id, chaosTabIds.join(',')])
+
+    if (chaosTabIds.length > 0 && !modified) {
+      const { data: chaosResult } = await supabase
+        .from('chaos_content')
+        .select('updated_at')
+        .in('tab_id', chaosTabIds)
+      if (chaosResult?.length) {
+        const maxChaos = Math.max(
+          ...(chaosResult as { updated_at: string }[]).map((r) => new Date(r.updated_at).getTime()),
+        )
+        if (maxChaos > genTime) modified = true
+      }
+    }
+
+    setSourceModified(modified)
+  }, [tab.id, chaosTabIds.join(','), includeDescription, includeTodos, project.id, project.updated_at])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   async function handleGenerate() {
     const { data: apiKey } = await supabase.rpc('get_gemini_key')
-
     if (!apiKey) {
       toast.error(t('digestTab.noKeyError'), true)
       return
     }
 
-    const { data: chaosRows } = await supabase
-      .from('chaos_content')
-      .select('content, tab_id')
-      .in('tab_id', chaosTabIds)
+    const contextParts: string[] = []
 
-    const context = (chaosRows ?? [])
-      .map((row: { content: string; tab_id: string }) => {
+    if (includeDescription) {
+      if (project.long_description) {
+        contextParts.push(`## ${t('geminiContext.description')}\n\n${project.long_description}`)
+      }
+      if (project.key_points.length > 0) {
+        contextParts.push(
+          `## ${t('geminiContext.keyPoints')}\n\n${project.key_points.map((p) => `• ${p}`).join('\n')}`,
+        )
+      }
+    }
+
+    if (includeTodos) {
+      const { data: infoTab } = await supabase
+        .from('tabs')
+        .select('id')
+        .eq('project_id', project.id)
+        .eq('type', 'infos')
+        .limit(1)
+        .maybeSingle()
+      if (infoTab) {
+        const { data: todosData } = await supabase
+          .from('todos')
+          .select('content, completed, urgent')
+          .eq('tab_id', (infoTab as { id: string }).id)
+          .order('position')
+        const activeTodos = (
+          (todosData as { content: string; completed: boolean; urgent: boolean }[]) ?? []
+        ).filter((todo) => !todo.completed)
+        if (activeTodos.length > 0) {
+          contextParts.push(
+            `## ${t('geminiContext.activeTodos')}\n\n${activeTodos.map((todo) => `${todo.urgent ? `[${t('geminiContext.urgent')}] ` : ''}• ${todo.content}`).join('\n')}`,
+          )
+        }
+      }
+    }
+
+    if (chaosTabIds.length > 0) {
+      const { data: chaosRows } = await supabase
+        .from('chaos_content')
+        .select('content, tab_id')
+        .in('tab_id', chaosTabIds)
+      for (const row of (chaosRows as { content: string; tab_id: string }[]) ?? []) {
         const tabName = chaosTabs.find((ct) => ct.id === row.tab_id)?.title ?? 'Chaos'
-        return `## ${tabName}\n\n${row.content}`
-      })
-      .join('\n\n---\n\n')
+        if (row.content.trim()) {
+          contextParts.push(`## ${tabName}\n\n${row.content}`)
+        }
+      }
+    }
+
+    const context = contextParts.join('\n\n---\n\n')
 
     if (!context.trim()) {
       toast.error(t('digestTab.emptyContextError'))
@@ -96,7 +174,7 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
         .single()
       if (gen) setGenerated(gen as DigestGenerated)
       setPromptOpen(false)
-      setChaosModified(false)
+      setSourceModified(false)
       toast.success(t('digestTab.generated'))
     } catch {
       toast.error(t('digestTab.generateError'), true)
@@ -109,19 +187,25 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
     await onUpdateTab({ config: { ...tab.config, prompt: newPrompt } })
   }
 
-  const generateDisabled = chaosTabIds.length === 0 || (!!generated && !chaosModified)
+  const hasAnySources = includeDescription || includeTodos || chaosTabIds.length > 0
+  const generateDisabled = !hasAnySources || (!!generated && !sourceModified)
+
+  const sourceChips: { key: string; label: string }[] = []
+  if (includeDescription) sourceChips.push({ key: 'description', label: t('digestTab.sourceDescription') })
+  if (includeTodos) sourceChips.push({ key: 'todos', label: t('digestTab.sourceTodos') })
+  chaosTabs.forEach((ct) => sourceChips.push({ key: ct.id, label: ct.title }))
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-2xl">
-      {chaosTabs.length > 0 && (
+    <div className="flex flex-col gap-6 p-6">
+      {sourceChips.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           <span className="text-xs text-slate-500 dark:text-slate-400 self-center">{t('digestTab.sources')}</span>
-          {chaosTabs.map((ct) => (
+          {sourceChips.map((chip) => (
             <span
-              key={ct.id}
+              key={chip.key}
               className="rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 text-xs text-slate-600 dark:text-slate-300"
             >
-              {ct.title}
+              {chip.label}
             </span>
           ))}
         </div>
@@ -130,7 +214,7 @@ export function DigestTab({ tab, onUpdateTab }: DigestTabProps) {
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         <button
           onClick={() => setPromptOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
         >
           <span className="flex items-center gap-2">
             {promptOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}

@@ -30,7 +30,7 @@ export function Modal({ open, onClose, title, children, className, size = 'md' }
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-black/50" aria-hidden="true" onClick={onClose} />
       <div
         role="dialog"
@@ -38,6 +38,7 @@ export function Modal({ open, onClose, title, children, className, size = 'md' }
         className={cn(
           'relative w-full rounded-2xl border border-slate-200 dark:border-slate-700',
           'bg-white dark:bg-slate-800 shadow-xl',
+          'max-h-[90svh] overflow-y-auto my-auto',
           sizes[size],
           className,
         )}

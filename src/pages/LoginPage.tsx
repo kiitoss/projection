@@ -24,7 +24,7 @@ export function LoginPage() {
 
         <button
           onClick={signInWithGoogle}
-          className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm font-medium text-slate-900 dark:text-slate-100 shadow-sm transition hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm font-medium text-slate-900 dark:text-slate-100 shadow-sm transition hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           <GoogleIcon />
           {t('auth.signInWithGoogle')}

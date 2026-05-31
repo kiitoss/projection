@@ -16,12 +16,13 @@ export function AddTabModal({ open, onClose, onAdd, existingTabs }: AddTabModalP
   const [selected, setSelected] = useState<TabType | null>(null)
   const [title, setTitle] = useState('')
   const [selectedChaosIds, setSelectedChaosIds] = useState<string[]>([])
+  const [includeDescription, setIncludeDescription] = useState(true)
+  const [includeTodos, setIncludeTodos] = useState(false)
   const [loading, setLoading] = useState(false)
   const { t } = useTranslation()
 
   const hasWidgets = existingTabs.some((tab) => tab.type === 'widgets')
   const chaosTabs = existingTabs.filter((tab) => tab.type === 'chaos')
-  const hasChaos = chaosTabs.length > 0
 
   const tabTypes = [
     { type: 'chaos' as TabType, label: t('addTab.types.chaos.label'), description: t('addTab.types.chaos.description') },
@@ -31,13 +32,11 @@ export function AddTabModal({ open, onClose, onAdd, existingTabs }: AddTabModalP
 
   function isDisabled(type: TabType) {
     if (type === 'widgets') return hasWidgets
-    if (type === 'digest') return !hasChaos
     return false
   }
 
   function disabledReason(type: TabType) {
     if (type === 'widgets') return t('addTab.widgetsExists')
-    if (type === 'digest') return t('addTab.noChaos')
     return ''
   }
 
@@ -52,17 +51,23 @@ export function AddTabModal({ open, onClose, onAdd, existingTabs }: AddTabModalP
     setSelected(type)
     setTitle(defaultTitle(type))
     setSelectedChaosIds([])
+    setIncludeDescription(true)
+    setIncludeTodos(false)
   }
+
+  const hasAnySource = includeDescription || includeTodos || selectedChaosIds.length > 0
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selected) return
-    if (selected === 'digest' && selectedChaosIds.length === 0) return
+    if (selected === 'digest' && !hasAnySource) return
     setLoading(true)
 
     const config: Record<string, unknown> = {}
     if (selected === 'digest') {
       config.chaos_tab_ids = selectedChaosIds
+      config.include_description = includeDescription
+      config.include_todos = includeTodos
       config.prompt = t('digestTab.defaultPrompt')
     }
 
@@ -75,6 +80,8 @@ export function AddTabModal({ open, onClose, onAdd, existingTabs }: AddTabModalP
     setSelected(null)
     setTitle('')
     setSelectedChaosIds([])
+    setIncludeDescription(true)
+    setIncludeTodos(false)
     onClose()
   }
 
@@ -124,27 +131,50 @@ export function AddTabModal({ open, onClose, onAdd, existingTabs }: AddTabModalP
         {selected === 'digest' && (
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
-              {t('addTab.chaosSources')} <span className="text-red-500">{t('common.required')}</span>
+              {t('addTab.sources')} <span className="text-red-500">{t('common.required')}</span>
             </label>
-            <div className="flex flex-col gap-1">
-              {chaosTabs.map((ct) => (
-                <label key={ct.id} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedChaosIds.includes(ct.id)}
-                    onChange={(e) =>
-                      setSelectedChaosIds((prev) =>
-                        e.target.checked ? [...prev, ct.id] : prev.filter((id) => id !== ct.id),
-                      )
-                    }
-                    className="rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
-                  />
-                  <span className="text-sm text-slate-700 dark:text-slate-200">{ct.title}</span>
-                </label>
-              ))}
+            <div className="flex flex-col gap-1.5">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeDescription}
+                  onChange={(e) => setIncludeDescription(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-slate-700 dark:text-slate-200">{t('digestTab.sourceDescription')}</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeTodos}
+                  onChange={(e) => setIncludeTodos(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-slate-700 dark:text-slate-200">{t('digestTab.sourceTodos')}</span>
+              </label>
+              {chaosTabs.length > 0 && (
+                <>
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{t('addTab.chaosSources')}</p>
+                  {chaosTabs.map((ct) => (
+                    <label key={ct.id} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedChaosIds.includes(ct.id)}
+                        onChange={(e) =>
+                          setSelectedChaosIds((prev) =>
+                            e.target.checked ? [...prev, ct.id] : prev.filter((id) => id !== ct.id),
+                          )
+                        }
+                        className="rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-slate-700 dark:text-slate-200">{ct.title}</span>
+                    </label>
+                  ))}
+                </>
+              )}
             </div>
-            {selectedChaosIds.length === 0 && (
-              <p className="mt-1 text-xs text-red-500">{t('addTab.selectOneChaos')}</p>
+            {!hasAnySource && (
+              <p className="mt-1 text-xs text-red-500">{t('addTab.selectOneSource')}</p>
             )}
           </div>
         )}
@@ -155,7 +185,7 @@ export function AddTabModal({ open, onClose, onAdd, existingTabs }: AddTabModalP
             type="submit"
             variant="primary"
             loading={loading}
-            disabled={!selected || (selected === 'digest' && selectedChaosIds.length === 0)}
+            disabled={!selected || (selected === 'digest' && !hasAnySource)}
           >
             {t('addTab.add')}
           </Button>

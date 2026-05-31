@@ -1,6 +1,22 @@
-import { useMemo, useState } from 'react'
-import { Search, ArrowUpDown } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Search, ArrowUpDown, ListTodo, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Header } from '@/components/layout/Header'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ProjectCard } from '@/components/project/ProjectCard'
@@ -15,11 +31,45 @@ import { useAppStore } from '@/store/useAppStore'
 import { supabase } from '@/lib/supabase'
 import { generateWithGemini, buildProjectContext } from '@/lib/gemini'
 import { toast } from '@/store/useAppStore'
-import type { Widget, DigestTabConfig } from '@/types'
+import { cn } from '@/lib/utils'
+import type { Widget, DigestTabConfig, ProjectWithRelations, CardTodo } from '@/types'
 
 interface GlobalRegenItems {
   digestTabs: Array<{ tabId: string; projectId: string; chaosTabIds: string[]; prompt: string }>
   widgets: Array<Widget & { projectId: string }>
+}
+
+const ORDER_KEY = 'projection-project-order'
+
+function getStoredOrder(): string[] {
+  try { return JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]') }
+  catch { return [] }
+}
+
+function saveOrder(ids: string[]) {
+  localStorage.setItem(ORDER_KEY, JSON.stringify(ids))
+}
+
+interface SortableCardProps {
+  project: ProjectWithRelations
+  onDelete: (id: string) => Promise<void>
+  onArchive: (id: string) => Promise<void>
+  onRename: (id: string, name: string) => Promise<void>
+}
+
+function SortableProjectCard({ project, onDelete, onArchive, onRename }: SortableCardProps) {
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && 'opacity-50 z-50')}
+    >
+      <ProjectCard project={project} onDelete={onDelete} onArchive={onArchive} onRename={onRename} />
+    </div>
+  )
 }
 
 export function HomePage() {
@@ -33,7 +83,20 @@ export function HomePage() {
   const [regenCheckLoading, setRegenCheckLoading] = useState(false)
   const [regenAllItems, setRegenAllItems] = useState<GlobalRegenItems | null>(null)
   const [regenProgress, setRegenProgress] = useState<{ current: number; total: number } | null>(null)
+  const [showTodosPanel, setShowTodosPanel] = useState(false)
+  const [localOrder, setLocalOrder] = useState<string[]>(() => getStoredOrder())
+  const [panelTodos, setPanelTodos] = useState<Array<{ project: ProjectWithRelations; todos: CardTodo[] }>>([])
   const { t } = useTranslation()
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  useEffect(() => {
+    setPanelTodos(
+      projects
+        .filter((p) => (p.urgent_todos?.length ?? 0) > 0)
+        .map((p) => ({ project: p, todos: p.urgent_todos! })),
+    )
+  }, [projects])
 
   const filteredProjects = useMemo(() => {
     let list = [...projects]
@@ -56,6 +119,18 @@ export function HomePage() {
     return list
   }, [projects, selectedTagIds, searchQuery, sortBy])
 
+  const orderedProjects = useMemo(() => {
+    if (sortBy === 'name' || localOrder.length === 0) return filteredProjects
+    return [...filteredProjects].sort((a, b) => {
+      const ia = localOrder.indexOf(a.id)
+      const ib = localOrder.indexOf(b.id)
+      if (ia === -1 && ib === -1) return 0
+      if (ia === -1) return 1
+      if (ib === -1) return -1
+      return ia - ib
+    })
+  }, [filteredProjects, sortBy, localOrder])
+
   const projectCountByTag = useMemo(() => {
     const counts: Record<string, number> = {}
     for (const p of projects) {
@@ -65,6 +140,33 @@ export function HomePage() {
     }
     return counts
   }, [projects])
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = orderedProjects.findIndex((p) => p.id === active.id)
+    const newIndex = orderedProjects.findIndex((p) => p.id === over.id)
+    const newOrdered = arrayMove(orderedProjects, oldIndex, newIndex)
+    const newOrderedIds = newOrdered.map((p) => p.id)
+    const hiddenIds = projects.map((p) => p.id).filter((id) => !newOrderedIds.includes(id))
+    const fullOrder = [...newOrderedIds, ...hiddenIds]
+    setLocalOrder(fullOrder)
+    saveOrder(fullOrder)
+  }
+
+  async function handlePanelTodoCheck(projectId: string, todoId: string) {
+    const item = panelTodos.find((i) => i.project.id === projectId)
+    const todo = item?.todos.find((t) => t.id === todoId)
+    if (!todo) return
+    const newCompleted = !todo.completed
+    setPanelTodos((prev) =>
+      prev.map((i) => {
+        if (i.project.id !== projectId) return i
+        return { ...i, todos: i.todos.map((t) => t.id === todoId ? { ...t, completed: newCompleted } : t) }
+      }),
+    )
+    await supabase.from('todos').update({ completed: newCompleted }).eq('id', todoId)
+  }
 
   async function handleClickRegenerateAll() {
     if (!projects.length) return
@@ -83,7 +185,6 @@ export function HomePage() {
     const digestTabs = (allTabs ?? []).filter((t) => t.type === 'digest') as typeof chaosTabs
     const widgetsTabs = (allTabs ?? []).filter((t) => t.type === 'widgets') as typeof chaosTabs
 
-    // Fetch chaos content updated_at for all chaos tabs
     const chaosContentsMap: { tab_id: string; updated_at: string }[] = []
     if (chaosTabs.length) {
       const { data } = await supabase
@@ -93,7 +194,6 @@ export function HomePage() {
       chaosContentsMap.push(...((data as { tab_id: string; updated_at: string }[]) ?? []))
     }
 
-    // Max chaos updated_at per project
     const chaosMaxByProject: Record<string, Date> = {}
     for (const cc of chaosContentsMap) {
       const tab = chaosTabs.find((t) => t.id === cc.tab_id)
@@ -104,7 +204,6 @@ export function HomePage() {
       }
     }
 
-    // Find stale digest tabs
     const staleDigestTabs: GlobalRegenItems['digestTabs'] = []
     for (const digestTab of digestTabs) {
       const config = digestTab.config as unknown as DigestTabConfig
@@ -137,7 +236,6 @@ export function HomePage() {
       }
     }
 
-    // Find stale widgets
     const staleWidgets: GlobalRegenItems['widgets'] = []
     if (widgetsTabs.length) {
       const { data: allWidgets } = await supabase
@@ -183,7 +281,6 @@ export function HomePage() {
 
     let current = 0
 
-    // Regenerate stale digests
     for (const { tabId, chaosTabIds, prompt } of regenAllItems.digestTabs) {
       try {
         const [{ data: chaosRows }, { data: chaosTabs }] = await Promise.all([
@@ -212,7 +309,6 @@ export function HomePage() {
       setRegenProgress({ current, total })
     }
 
-    // Regenerate stale widgets grouped by project
     const widgetsByProject = regenAllItems.widgets.reduce<Record<string, Array<Widget & { projectId: string }>>>(
       (acc, w) => { (acc[w.projectId] ??= []).push(w); return acc },
       {},
@@ -295,8 +391,8 @@ export function HomePage() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl p-4 lg:p-6">
-            <div className="mb-4 flex items-center justify-center gap-3">
-              <div className="relative w-full max-w-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="relative flex-1">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={searchQuery}
@@ -312,6 +408,19 @@ export function HomePage() {
               >
                 <ArrowUpDown size={13} />
                 {sortBy === 'name' ? t('home.sortAlpha') : t('home.sortRecent')}
+              </button>
+
+              <button
+                onClick={() => setShowTodosPanel((v) => !v)}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs transition-colors cursor-pointer',
+                  showTodosPanel
+                    ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                    : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
+                )}
+              >
+                <ListTodo size={13} />
+                {t('home.toggleTodos')}
               </button>
             </div>
 
@@ -348,9 +457,25 @@ export function HomePage() {
                   </>
                 )}
               </div>
+            ) : sortBy === 'updated_at' ? (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={orderedProjects.map((p) => p.id)} strategy={rectSortingStrategy}>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {orderedProjects.map((project) => (
+                      <SortableProjectCard
+                        key={project.id}
+                        project={project}
+                        onDelete={deleteProject}
+                        onArchive={(id) => archiveProject(id, true)}
+                        onRename={(id, name) => updateProject(id, { name })}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredProjects.map((project) => (
+                {orderedProjects.map((project) => (
                   <ProjectCard
                     key={project.id}
                     project={project}
@@ -363,6 +488,63 @@ export function HomePage() {
             )}
           </div>
         </main>
+
+        {showTodosPanel && (
+          <aside className="w-1/3 min-w-64 max-w-sm shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-y-auto">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {t('home.importantTodos')}
+                </h2>
+                <button
+                  onClick={() => setShowTodosPanel(false)}
+                  className="rounded-md p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  aria-label="Fermer"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+              {panelTodos.length === 0 ? (
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {t('home.noImportantTodos')}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-5">
+                  {panelTodos.map(({ project, todos }) => (
+                    <div key={project.id}>
+                      <Link
+                        to={`/projects/${project.id}`}
+                        className="block mb-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline truncate"
+                      >
+                        {project.name}
+                      </Link>
+                      <div className="flex flex-col gap-1.5">
+                        {todos.map((todo) => (
+                          <label key={todo.id} className="flex items-start gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={todo.completed}
+                              onChange={() => handlePanelTodoCheck(project.id, todo.id)}
+                              className="mt-0.5 h-3 w-3 shrink-0 rounded border-slate-300 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span className={cn(
+                              'text-xs leading-snug',
+                              todo.completed
+                                ? 'line-through text-slate-400 dark:text-slate-500'
+                                : 'text-slate-600 dark:text-slate-300',
+                            )}>
+                              {todo.content}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
       </div>
 
       <CreateProjectModal

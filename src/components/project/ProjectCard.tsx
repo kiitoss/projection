@@ -64,7 +64,7 @@ export function ProjectCard({ project, onDelete, onArchive, onRename }: ProjectC
       <div
         className={cn(
           'group relative flex flex-col gap-3 rounded-xl border border-slate-200 dark:border-slate-700',
-          'bg-white dark:bg-slate-800 p-4 shadow-sm transition-shadow hover:shadow-md cursor-pointer',
+          'bg-white dark:bg-slate-800 p-4 shadow-sm transition-shadow hover:shadow-md cursor-pointer select-none',
         )}
         onClick={(e) => {
           if ((e.target as HTMLElement).closest('[data-no-nav]')) return

@@ -41,7 +41,10 @@
     "emptyCreate": "Commencez par créer votre premier projet",
     "createProject": "Créer un projet",
     "noResults": "Aucun projet ne correspond à ce filtre",
-    "resetFilters": "Réinitialiser les filtres"
+    "resetFilters": "Réinitialiser les filtres",
+    "toggleTodos": "Tâches",
+    "importantTodos": "Tâches importantes",
+    "noImportantTodos": "Aucune tâche importante"
   },
   "projectCard": {
     "todos": "Todo",
@@ -87,8 +90,10 @@
   "addTab": {
     "title": "Ajouter un onglet",
     "tabTitle": "Titre de l'onglet",
-    "chaosSources": "Sources Chaos",
+    "sources": "Sources",
+    "chaosSources": "Onglets Chaos",
     "selectOneChaos": "Sélectionnez au moins un onglet Chaos",
+    "selectOneSource": "Sélectionnez au moins une source",
     "todoExists": "Un onglet Todo existe déjà",
     "widgetsExists": "Un onglet Widgets existe déjà",
     "noChaos": "Créez d'abord un onglet Chaos",
@@ -104,7 +109,7 @@
       },
       "digest": {
         "label": "Digest",
-        "description": "Synthèse IA à partir des notes Chaos"
+        "description": "Synthèse IA à partir des données du projet"
       },
       "widgets": {
         "label": "Widgets",
@@ -113,7 +118,7 @@
     }
   },
   "descriptionTab": {
-    "defaultTitle": "Description",
+    "defaultTitle": "Infos",
     "shortDesc": "Description courte",
     "showOnCard": "Afficher sur la card",
     "shortDescPlaceholder": "Un résumé court de votre projet...",
@@ -125,7 +130,7 @@
     "addPoint": "Ajouter un point",
     "keyPointPlaceholder": "Point clé...",
     "reorder": "Réordonner",
-    "urgences": "Urgences",
+    "urgences": "Importantes",
     "links": "Liens",
     "urlPlaceholder": "https://...",
     "labelPlaceholder": "Label (optionnel)",
@@ -133,7 +138,7 @@
   },
   "todoTab": {
     "show": "Afficher",
-    "importantOnCard": "importantes sur la card",
+    "importantOnCard": "sur la card",
     "filterAll": "Toutes",
     "filterActive": "Actives",
     "filterCompleted": "Complétées",
@@ -155,18 +160,20 @@
   },
   "digestTab": {
     "sources": "Sources :",
+    "sourceDescription": "Description",
+    "sourceTodos": "Todo",
     "prompt": "Prompt",
     "lastGenerated": "Dernière génération : {{date}}",
     "generate": "Générer",
     "generating": "Génération...",
     "generatingMessage": "Génération en cours...",
-    "emptyState": "Cliquez sur \"Générer\" pour créer un digest à partir de vos notes Chaos.",
-    "defaultPrompt": "Résume de façon claire et synthétique les informations clés contenues dans ces notes. Identifie les actions importantes, les décisions prises et les points d'attention. Utilise des listes et des titres pour structurer la réponse.",
+    "emptyState": "Cliquez sur \"Générer\" pour créer un digest.",
+    "defaultPrompt": "Résume de façon claire et synthétique les informations clés contenues dans ces données. Identifie les actions importantes, les décisions prises et les points d'attention. Utilise des listes et des titres pour structurer la réponse.",
     "noKeyError": "Configurez votre clé Gemini dans les Paramètres",
-    "emptyContextError": "Les onglets Chaos sources sont vides",
+    "emptyContextError": "Les sources sélectionnées ne contiennent aucun contenu",
     "generated": "Digest généré",
     "generateError": "Erreur lors de la génération. Vérifiez votre clé Gemini.",
-    "notModified": "Aucune modification du Chaos depuis la dernière génération"
+    "notModified": "Aucune modification des sources depuis la dernière génération"
   },
   "widgetsTab": {
     "header": "Widgets ({{count}})",
@@ -233,7 +240,21 @@
       "deleteTitle": "Supprimer le tag \"{{name}}\" ?",
       "deleteDescription": "Le tag sera retiré de tous les projets associés.",
       "empty": "Aucun tag. Créez-en un ci-dessous."
+    },
+    "inviteCode": {
+      "title": "Code d'invitation",
+      "description": "Génère un code à 6 chiffres valable 30 secondes à partager avec la personne à inviter.",
+      "generate": "Générer un code",
+      "expiresIn": "Expire dans {{seconds}}s",
+      "error": "Erreur lors de la génération du code"
     }
+  },
+  "invite": {
+    "subtitle": "Entrez le code affiché dans votre application d'authentification pour accéder à Projection.",
+    "placeholder": "000000",
+    "submit": "Accéder",
+    "invalidCode": "Code incorrect. Réessayez.",
+    "signOut": "Se connecter avec un autre compte"
   },
   "toasts": {
     "projectsLoadError": "Erreur lors du chargement des projets",
@@ -265,6 +286,6 @@
     "keyPoints": "Points clés :",
     "notes": "Notes ({{title}}) :",
     "activeTodos": "Tâches en cours :",
-    "urgent": "URGENT"
+    "urgent": "IMPORTANT"
   }
 }

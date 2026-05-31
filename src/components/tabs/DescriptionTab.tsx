@@ -334,8 +334,8 @@ function LinksSection({
             className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <div className="flex gap-2">
-            <button type="submit" className="text-sm text-indigo-500 hover:text-indigo-600">{t('common.add')}</button>
-            <button type="button" onClick={() => setAdding(false)} className="text-sm text-slate-400 hover:text-slate-600">{t('common.cancel')}</button>
+            <button type="submit" className="cursor-pointer text-sm text-indigo-500 hover:text-indigo-600">{t('common.add')}</button>
+            <button type="button" onClick={() => setAdding(false)} className="cursor-pointer text-sm text-slate-400 hover:text-slate-600">{t('common.cancel')}</button>
           </div>
         </form>
       ) : (
